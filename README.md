@@ -177,9 +177,11 @@ A `Date` in a year outside 0 to 9999 is written with a sign and all its digits (
 
 ## Zero Values
 
-- `civil.Time{}` is midnight, a real time of day.
-- `civil.Date{}` is not a day. It stands for a missing date; `IsZero` reports it, and other methods are meaningless on it.
-- `civil.DateTime{}` has no date, so it is not a datetime either. `NewDateTime` rejects the zero `Date`.
+A value is built by a constructor, but Go still lets anyone write `civil.Date{}`. `IsValid` tells such a value apart:
+
+- `civil.Date{}` is not a day. It stands for a missing date: `IsValid` returns false, and other methods are meaningless on it.
+- `civil.DateTime{}` has no date, so it is not a datetime either, and `IsValid` returns false. `NewDateTime` rejects the zero `Date`.
+- `civil.Time{}` is midnight, a real time of day, so `Time` has no `IsValid`.
 
 ## Testing
 

@@ -58,6 +58,29 @@ func TestNewDateTime(t *testing.T) {
 	}
 }
 
+func TestDateTimeIsValid(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		dateTime civil.DateTime
+		want     bool
+	}{
+		{name: "zero value", dateTime: civil.DateTime{}, want: false},
+		{name: "date at midnight", dateTime: dateTime(t, date(t, 2026, time.March, 9), civil.Time{}), want: true},
+		{name: "date and time", dateTime: dateTime(t, date(t, 2026, time.March, 9), clock(t, 9, 30, 0, 0)), want: true},
+		{name: "datetime of the zero time", dateTime: civil.NewDateTimeFromTime(time.Time{}), want: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			assert.Equal(t, tt.want, tt.dateTime.IsValid())
+		})
+	}
+}
+
 func TestNewDateTimeFromTime(t *testing.T) {
 	t.Parallel()
 

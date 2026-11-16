@@ -27,8 +27,8 @@ const (
 // map keys.
 //
 // The zero value is the one exception: it has no date, so it is not a
-// datetime. It stands for a missing one, and other methods are meaningless
-// on it.
+// datetime. It stands for a missing one, IsValid reports false for it, and
+// other methods are meaningless on it.
 type DateTime struct {
 	// date is the calendar day. It is never the zero Date.
 	date Date
@@ -82,6 +82,13 @@ func (dt DateTime) Date() Date { return dt.date }
 
 // Time returns the time of day of the datetime.
 func (dt DateTime) Time() Time { return dt.time }
+
+// IsValid reports whether dt is a datetime. It is false only for the zero
+// value, which stands for a missing one; every DateTime from a constructor
+// is valid.
+func (dt DateTime) IsValid() bool {
+	return dt.date.IsValid()
+}
 
 // String returns the datetime as the date, the letter T and the time:
 // 2026-03-09T09:30:00. The two parts are written as Date.String and
@@ -176,7 +183,7 @@ func (dt *DateTime) Scan(src any) error {
 }
 
 func (dt DateTime) validate() error {
-	if dt.date.IsZero() {
+	if !dt.date.IsValid() {
 		return errors.New("date must not be the zero Date")
 	}
 

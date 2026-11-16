@@ -111,7 +111,7 @@ func TestNewDate(t *testing.T) {
 			got, err := civil.NewDate(tt.year, tt.month, tt.day)
 			if tt.wantErr != "" {
 				require.EqualError(t, err, tt.wantErr)
-				assert.True(t, got.IsZero())
+				assert.False(t, got.IsValid())
 
 				return
 			}
@@ -121,7 +121,7 @@ func TestNewDate(t *testing.T) {
 			assert.Equal(t, tt.month, got.Month())
 			assert.Equal(t, tt.day, got.Day())
 			assert.Equal(t, tt.want, got.String())
-			assert.False(t, got.IsZero())
+			assert.True(t, got.IsValid())
 		})
 	}
 }
@@ -154,7 +154,7 @@ func TestNewDateFromTime(t *testing.T) {
 			got := civil.NewDateFromTime(tt.time)
 
 			assert.Equal(t, tt.want, got)
-			assert.False(t, got.IsZero())
+			assert.True(t, got.IsValid())
 		})
 	}
 }
@@ -210,7 +210,7 @@ func TestNewDateFromString(t *testing.T) {
 			got, err := civil.NewDateFromString(tt.text)
 			if tt.wantErr != "" {
 				require.EqualError(t, err, fmt.Sprintf("invalid date %q: %s", tt.text, tt.wantErr))
-				assert.True(t, got.IsZero())
+				assert.False(t, got.IsValid())
 
 				return
 			}
@@ -222,7 +222,7 @@ func TestNewDateFromString(t *testing.T) {
 	}
 }
 
-func TestDateIsZero(t *testing.T) {
+func TestDateIsValid(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -230,17 +230,17 @@ func TestDateIsZero(t *testing.T) {
 		date civil.Date
 		want bool
 	}{
-		{name: "zero value", date: civil.Date{}, want: true},
-		{name: "earliest day of year 1", date: date(t, 1, time.January, 1)},
-		{name: "first day of year 0", date: date(t, 0, time.January, 1)},
-		{name: "date of the zero time", date: civil.NewDateFromTime(time.Time{})},
+		{name: "zero value", date: civil.Date{}, want: false},
+		{name: "earliest day of year 1", date: date(t, 1, time.January, 1), want: true},
+		{name: "first day of year 0", date: date(t, 0, time.January, 1), want: true},
+		{name: "date of the zero time", date: civil.NewDateFromTime(time.Time{}), want: true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			assert.Equal(t, tt.want, tt.date.IsZero())
+			assert.Equal(t, tt.want, tt.date.IsValid())
 		})
 	}
 }

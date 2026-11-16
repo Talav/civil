@@ -43,7 +43,8 @@ var daysInMonth = [...]int{31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}
 // comparable with == and usable as map keys.
 //
 // The zero value is the one exception: it is not a day. It stands for a
-// missing date and IsZero reports it. Other methods are meaningless on it.
+// missing date, IsValid reports false for it, and other methods are
+// meaningless on it.
 type Date struct {
 	// year is the calendar year. Year 0 comes before year 1, and negative
 	// years before that.
@@ -117,10 +118,10 @@ func (d Date) Weekday() time.Weekday {
 	return time.Weekday(((d.dayNumber()+1)%7 + 7) % 7)
 }
 
-// IsZero reports whether d is the zero value, which stands for a missing
-// date.
-func (d Date) IsZero() bool {
-	return d == Date{}
+// IsValid reports whether d is a day. It is false only for the zero value,
+// which stands for a missing date; every Date from a constructor is valid.
+func (d Date) IsValid() bool {
+	return d != Date{}
 }
 
 // String returns the date as YYYY-MM-DD.
