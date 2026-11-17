@@ -1,4 +1,5 @@
-FROM qmcgaw/godevcontainer:v0.23.0-debian
+# Pinned: the last release that runs as root; later ones use a non-root user.
+FROM qmcgaw/godevcontainer:v0.22.0-debian
 
 # Compiler for the workspace and for the tools below. The base image may ship
 # an older Go; this makes the go command fetch and use exactly this release.
@@ -12,8 +13,7 @@ RUN go install golang.org/x/tools/gopls@v0.24.0 && \
     go install mvdan.cc/gofumpt@v0.12.0 && \
     go install golang.org/x/tools/cmd/goimports@v0.52.0
 
-# Copy the entrypoint script into the image, executable. The base image runs
-# as the non-root "user", so a later chmod on this root-owned file would fail.
+# Copy the entrypoint script into the image, executable
 COPY --chmod=755 .devcontainer/entrypoint.sh /usr/local/bin/entrypoint.sh
 
 # Set the entrypoint (runs every time container starts)
