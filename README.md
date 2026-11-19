@@ -2,7 +2,6 @@
 
 [![tag](https://img.shields.io/github/tag/talav/civil.svg)](https://github.com/talav/civil/tags)
 [![Go Reference](https://pkg.go.dev/badge/github.com/talav/civil.svg)](https://pkg.go.dev/github.com/talav/civil)
-[![Go Report Card](https://goreportcard.com/badge/github.com/talav/civil)](https://goreportcard.com/report/github.com/talav/civil)
 [![CI](https://github.com/talav/civil/workflows/Civil%20CI/badge.svg)](https://github.com/talav/civil/actions)
 [![codecov](https://codecov.io/gh/talav/civil/graph/badge.svg)](https://codecov.io/gh/talav/civil)
 [![License](https://img.shields.io/github/license/talav/civil)](./LICENSE)
