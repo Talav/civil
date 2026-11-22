@@ -1,5 +1,5 @@
-// Package civil provides Date, Time and DateTime: a calendar day, a time of
-// day, and the two together, all without a time zone.
+// Package civil provides calendar dates, date ranges, times of day and
+// datetimes, all without a time zone.
 //
 // A Date names a day on the calendar, such as a trading day or an expiry. A
 // Time names a reading of a wall clock, such as a session close. A DateTime
