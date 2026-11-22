@@ -12,6 +12,8 @@ Calendar dates, times of day and date ranges for Go. Use them for birthdays, bus
 
 - **No normalizing**: an out-of-range part is rejected, never rolled over into the next month or hour
 - **Comparable**: values work with `==` and as map keys (`LocationDate` uses `Equal` instead)
+- **One notion of validity**: `IsValid()` is false only for a missing value, and every valid value can be encoded and read back
+- **Years 0 to 9999**: the years that `YYYY` writes; constructors and arithmetic return an error for any other year
 - **Text, JSON and SQL**: `encoding.TextMarshaler`, `encoding.TextAppender`, `driver.Valuer` and `sql.Scanner`
 
 ## Installation
@@ -38,12 +40,18 @@ start, err := civil.NewDate(2026, time.June, 1)
 if err != nil {
     return err
 }
-june, err := civil.NewDateRange(start, start.AddMonths(1))
+end, err := start.AddMonths(1)
+if err != nil {
+    return err
+}
+june, err := civil.NewDateRange(start, end)
 if err != nil {
     return err
 }
 fmt.Println(june.Days()) // 30
 ```
+
+`Merge` joins two overlapping or adjacent ranges, and `Intersect` returns the days two ranges share.
 
 ### Turning a civil value into an instant
 
@@ -59,7 +67,7 @@ A wall time that a zone skips or repeats on that day (a daylight saving change) 
 
 ### LocationDate
 
-A `LocationDate` is a `Date` in a named time zone.
+A `LocationDate` is a `Date` in a named IANA time zone. `"Local"` is rejected, because it names a different zone on each machine.
 
 ```go
 day, err := civil.NewLocationDate(start, "America/New_York")
@@ -67,6 +75,12 @@ if err != nil {
     return err
 }
 fmt.Println(day) // 2026-06-01[America/New_York]
+
+open, err := civil.NewTime(9, 30, 0, 0)
+if err != nil {
+    return err
+}
+fmt.Println(day.At(open).UTC()) // 2026-06-01 13:30:00 +0000 UTC
 ```
 
 ### JSON
@@ -98,6 +112,7 @@ Bind `r.Start()` and `r.End()` on writes. On reads, scan into two `civil.Date` v
 ## Zero Values
 
 - The zero values of `Date`, `DateTime`, `DateRange` and `LocationDate` represent missing values. Check them with `IsValid()`.
+- Encoding a missing value to text, JSON or SQL is an error. In JSON, tag the field `omitzero` to leave it out.
 - `civil.Time{}` is midnight, a real time of day, so `Time` has no `IsValid`.
 
 ## Testing

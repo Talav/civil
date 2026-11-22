@@ -44,7 +44,7 @@ func TestNewDateRange(t *testing.T) {
 		wantErr string
 	}{
 		{name: "across leap day", start: start, end: end, days: 2},
-		{name: "one day", start: start, end: start.AddDays(1), days: 1},
+		{name: "one day", start: start, end: plusDays(t, start, 1), days: 1},
 		{name: "missing start", end: end, wantErr: "start must not be the zero Date"},
 		{name: "missing end", start: start, wantErr: "end must not be the zero Date"},
 		{name: "both missing", wantErr: "start must not be the zero Date"},
@@ -77,15 +77,15 @@ func TestNewDateRange(t *testing.T) {
 func TestDateRangeContains(t *testing.T) {
 	t.Parallel()
 
-	start := date(t, -1, time.December, 31)
-	end := date(t, 0, time.January, 2)
+	start := date(t, 0, time.December, 31)
+	end := date(t, 1, time.January, 2)
 	r := dateRange(t, start, end)
 
-	for _, d := range []civil.Date{start, end.AddDays(-1)} {
+	for _, d := range []civil.Date{start, plusDays(t, end, -1)} {
 		assert.True(t, r.Contains(d), d)
 	}
 
-	for _, d := range []civil.Date{start.AddDays(-1), end, end.AddDays(1)} {
+	for _, d := range []civil.Date{plusDays(t, start, -1), end, plusDays(t, end, 1)} {
 		assert.False(t, r.Contains(d), d)
 	}
 }
@@ -93,9 +93,9 @@ func TestDateRangeContains(t *testing.T) {
 func TestDateRangeRelations(t *testing.T) {
 	t.Parallel()
 
-	origin := date(t, -1, time.December, 15)
+	origin := date(t, 0, time.December, 15)
 	span := func(start, end int) civil.DateRange {
-		return dateRange(t, origin.AddDays(start), origin.AddDays(end))
+		return dateRange(t, plusDays(t, origin, start), plusDays(t, origin, end))
 	}
 	base := span(10, 20)
 
@@ -114,14 +114,18 @@ func TestDateRangeRelations(t *testing.T) {
 
 		// union is the expected merge result, zero for a gap.
 		union civil.DateRange
+
+		// common is the expected intersection, zero when no day is shared.
+		common civil.DateRange
 	}{
-		{name: "same", other: base, overlaps: true, union: base},
-		{name: "starts earlier and overlaps", other: span(5, 15), cmp: 1, overlaps: true, union: span(5, 20)},
-		{name: "starts later and overlaps", other: span(15, 25), cmp: -1, overlaps: true, union: span(10, 25)},
-		{name: "encloses", other: span(5, 25), cmp: 1, overlaps: true, union: span(5, 25)},
-		{name: "inside", other: span(12, 15), cmp: -1, overlaps: true, union: base},
-		{name: "same start shorter", other: span(10, 18), cmp: 1, overlaps: true, union: base},
-		{name: "same start longer", other: span(10, 23), cmp: -1, overlaps: true, union: span(10, 23)},
+		{name: "same", other: base, overlaps: true, union: base, common: base},
+		{name: "starts earlier and overlaps", other: span(5, 15), cmp: 1, overlaps: true, union: span(5, 20), common: span(10, 15)},
+		{name: "starts later and overlaps", other: span(15, 25), cmp: -1, overlaps: true, union: span(10, 25), common: span(15, 20)},
+		{name: "encloses", other: span(5, 25), cmp: 1, overlaps: true, union: span(5, 25), common: base},
+		{name: "inside", other: span(12, 15), cmp: -1, overlaps: true, union: base, common: span(12, 15)},
+		{name: "same start shorter", other: span(10, 18), cmp: 1, overlaps: true, union: base, common: span(10, 18)},
+		{name: "same start longer", other: span(10, 23), cmp: -1, overlaps: true, union: span(10, 23), common: base},
+		{name: "one shared day", other: span(19, 30), cmp: -1, overlaps: true, union: span(10, 30), common: span(19, 20)},
 		{name: "adjacent on left", other: span(5, 10), cmp: 1, union: span(5, 20)},
 		{name: "adjacent on right", other: span(20, 25), cmp: -1, union: span(10, 25)},
 		{name: "gap on left", other: span(5, 9), cmp: 1},
@@ -144,6 +148,14 @@ func TestDateRangeRelations(t *testing.T) {
 			got, ok = tt.other.Merge(base)
 			assert.Equal(t, tt.union.IsValid(), ok)
 			assert.Equal(t, tt.union, got)
+
+			got, ok = base.Intersect(tt.other)
+			assert.Equal(t, tt.overlaps, ok)
+			assert.Equal(t, tt.common, got)
+
+			got, ok = tt.other.Intersect(base)
+			assert.Equal(t, tt.overlaps, ok)
+			assert.Equal(t, tt.common, got)
 		})
 	}
 }
@@ -251,7 +263,7 @@ func TestDateRangeJSON(t *testing.T) {
 	assert.Equal(t, june, got)
 
 	require.NoError(t, json.Unmarshal([]byte(`{"end":"2026-06-03","start":"2026-06-02"}`), &got))
-	assert.Equal(t, dateRange(t, june.Start().AddDays(1), june.Start().AddDays(2)), got)
+	assert.Equal(t, dateRange(t, plusDays(t, june.Start(), 1), plusDays(t, june.Start(), 2)), got)
 }
 
 func TestDateRangeUnmarshalJSON(t *testing.T) {
@@ -326,38 +338,39 @@ func TestDateRangeMarshalYears(t *testing.T) {
 	assert.Equal(t, r, decoded)
 
 	tests := []struct {
-		// name identifies the endpoint outside the wire format.
+		// name identifies why the range has no wire format.
 		name string
 
-		// r is a valid range with an expanded year.
+		// r is the range to encode.
 		r civil.DateRange
 
-		// display is the printable form including the expanded year.
+		// display is the printable form, which still works.
 		display string
+
+		// wantErr is the reason encoding fails.
+		wantErr string
 	}{
-		{name: "negative start", r: dateRange(t, first.AddDays(-1), first), display: "[-0001-12-31,0000-01-01)"},
-		{name: "five-digit end", r: dateRange(t, last, last.AddDays(1)), display: "[9999-12-31,+10000-01-01)"},
+		{name: "zero value", r: civil.DateRange{}, display: "[0000-00-00,0000-00-00)", wantErr: "cannot marshal the zero DateRange"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			const wantErr = "cannot marshal date range: endpoint years must be in 0000..9999"
 			assert.Equal(t, tt.display, tt.r.String())
 
 			b, err := tt.r.AppendText([]byte("range="))
-			require.EqualError(t, err, wantErr)
+			require.EqualError(t, err, tt.wantErr)
 			assert.Equal(t, "range=", string(b))
 
 			_, err = tt.r.MarshalText()
-			require.EqualError(t, err, wantErr)
+			require.EqualError(t, err, tt.wantErr)
 			_, err = tt.r.MarshalJSON()
-			require.EqualError(t, err, wantErr)
+			require.EqualError(t, err, tt.wantErr)
 			_, err = json.Marshal(tt.r)
-			require.ErrorContains(t, err, wantErr)
+			require.ErrorContains(t, err, tt.wantErr)
 			_, err = json.Marshal(map[civil.DateRange]int{tt.r: 1})
-			require.ErrorContains(t, err, wantErr)
+			require.ErrorContains(t, err, tt.wantErr)
 		})
 	}
 }

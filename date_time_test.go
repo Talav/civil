@@ -69,7 +69,7 @@ func TestDateTimeIsValid(t *testing.T) {
 		{name: "zero value", dateTime: civil.DateTime{}, want: false},
 		{name: "date at midnight", dateTime: dateTime(t, date(t, 2026, time.March, 9), civil.Time{}), want: true},
 		{name: "date and time", dateTime: dateTime(t, date(t, 2026, time.March, 9), clock(t, 9, 30, 0, 0)), want: true},
-		{name: "datetime of the zero time", dateTime: civil.NewDateTimeFromTime(time.Time{}), want: true},
+		{name: "datetime of the zero time", dateTime: dateTime(t, date(t, 1, time.January, 1), civil.Time{}), want: true},
 	}
 
 	for _, tt := range tests {
@@ -116,7 +116,8 @@ func TestNewDateTimeFromTime(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got := civil.NewDateTimeFromTime(tt.time)
+			got, err := civil.NewDateTimeFromTime(tt.time)
+			require.NoError(t, err)
 
 			assert.Equal(t, tt.want, got)
 			assert.True(t, tt.time.Equal(got.In(tt.time.Location())), "In must give the instant back")
@@ -124,10 +125,42 @@ func TestNewDateTimeFromTime(t *testing.T) {
 	}
 }
 
+func TestNewDateTimeFromTimeOutOfRange(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		time    time.Time
+		wantErr string
+	}{
+		{
+			name:    "year past four digits",
+			time:    time.Date(10000, time.January, 1, 9, 30, 0, 0, time.UTC),
+			wantErr: "year 10000 must be in 0..9999",
+		},
+		{
+			name:    "negative year",
+			time:    time.Date(-1, time.December, 31, 23, 59, 59, 0, time.UTC),
+			wantErr: "year -1 must be in 0..9999",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := civil.NewDateTimeFromTime(tt.time)
+
+			require.EqualError(t, err, tt.wantErr)
+			assert.Equal(t, civil.DateTime{}, got)
+		})
+	}
+}
+
 func TestNewDateTimeFromString(t *testing.T) {
 	t.Parallel()
 
-	const formatErr = "must be YYYY-MM-DDTHH:MM:SS"
+	const formatErr = "must be YYYY-MM-DD followed by T or a space and a time of day"
 
 	day := date(t, 2026, time.March, 9)
 
@@ -326,6 +359,32 @@ func TestDateTimeText(t *testing.T) {
 	}
 }
 
+func TestDateTimeTextErrors(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		value   civil.DateTime
+		display string
+		wantErr string
+	}{
+		{
+			name:    "zero value",
+			value:   civil.DateTime{},
+			display: "0000-00-00T00:00:00",
+			wantErr: "cannot marshal the zero DateTime",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			assertNoTextForm(t, tt.display, tt.wantErr, tt.value)
+		})
+	}
+}
+
 func TestDateTimeScan(t *testing.T) {
 	t.Parallel()
 
@@ -341,6 +400,16 @@ func TestDateTimeScan(t *testing.T) {
 		{name: "string", src: "2026-03-09T14:30:00", want: want},
 		{name: "string with a space", src: "2026-03-09 14:30:00", want: want},
 		{name: "bytes", src: []byte("2026-03-09 14:30:00"), want: want},
+		{
+			name: "time with a fraction",
+			src:  time.Date(2026, time.March, 9, 14, 30, 0, 250_000_000, time.UTC),
+			want: dateTime(t, date(t, 2026, time.March, 9), clock(t, 14, 30, 0, 250_000_000)),
+		},
+		{
+			name:    "time past four-digit years",
+			src:     time.Date(10000, time.January, 1, 9, 30, 0, 0, time.UTC),
+			wantErr: `invalid datetime "10000-01-01T09:30:00": must be YYYY-MM-DD followed by T or a space and a time of day`,
+		},
 		{name: "null", src: nil, wantErr: "invalid datetime: NULL"},
 		{name: "unsupported type", src: int64(1_773_066_600), wantErr: "invalid datetime: unsupported type int64"},
 		{

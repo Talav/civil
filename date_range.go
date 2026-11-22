@@ -5,18 +5,27 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"slices"
 )
 
-// dateRangeTextLen is the length of [YYYY-MM-DD,YYYY-MM-DD).
-const dateRangeTextLen = 2*dateLen + len("[,)")
+const (
+	// dateRangeTextLen is the length of [YYYY-MM-DD,YYYY-MM-DD).
+	dateRangeTextLen = 2*dateLen + len("[,)")
+
+	// dateRangeJSONLen is the length of the JSON object form of a range.
+	dateRangeJSONLen = 2*dateLen + len(`{"start":"","end":""}`)
+)
 
 // A DateRange is a nonempty range of calendar dates. The start is included
 // and the end is excluded. For example, June 1 to July 1 includes June 30
-// and excludes July 1. DateRanges are comparable and usable as map keys.
+// and excludes July 1.
 //
-// The zero value represents a missing range. IsValid reports false for it,
-// and other methods are meaningless on it.
+// A DateRange comes only from a constructor, so both dates are days that
+// exist and the end is after the start. DateRanges are comparable with == and
+// usable as map keys.
+//
+// The zero value is the one exception: it has no dates, so it is not a range.
+// It stands for a missing one, IsValid reports false for it, and other
+// methods are meaningless on it.
 type DateRange struct {
 	// start is the first included date.
 	start Date
@@ -26,7 +35,9 @@ type DateRange struct {
 }
 
 // NewDateRange returns the range from start up to but excluding end.
-// Both dates must be valid and end must be strictly after start.
+//
+// It returns an error if either date is the zero Date or end is not strictly
+// after start.
 func NewDateRange(start, end Date) (DateRange, error) {
 	r := DateRange{start: start, end: end}
 	if err := r.validate(); err != nil {
@@ -36,8 +47,9 @@ func NewDateRange(start, end Date) (DateRange, error) {
 	return r, nil
 }
 
-// NewDateRangeFromString reads [YYYY-MM-DD,YYYY-MM-DD), with each endpoint
-// in the four-digit-year format accepted by NewDateFromString.
+// NewDateRangeFromString returns the range written in s as
+// [YYYY-MM-DD,YYYY-MM-DD), each endpoint a date as NewDateFromString reads
+// it.
 func NewDateRangeFromString(s string) (DateRange, error) {
 	const comma = 1 + dateLen
 
@@ -69,72 +81,99 @@ func (r DateRange) Start() Date { return r.start }
 // End returns the first date excluded after the range.
 func (r DateRange) End() Date { return r.end }
 
-// IsValid reports whether r holds a range. It is false only for the zero value.
-func (r DateRange) IsValid() bool { return r.start.IsValid() }
+// IsValid reports whether r is a range. It is false only for the zero value,
+// which stands for a missing one. Every valid DateRange can be encoded.
+func (r DateRange) IsValid() bool {
+	return r.start.IsValid()
+}
 
 // Days returns the number of calendar days in r, as End().DaysSince(Start()).
 // The count must fit in an int.
-func (r DateRange) Days() int { return r.end.DaysSince(r.start) }
+func (r DateRange) Days() int {
+	return r.end.DaysSince(r.start)
+}
 
 // Contains reports whether d is a day in r.
 func (r DateRange) Contains(d Date) bool {
 	return !d.Before(r.start) && d.Before(r.end)
 }
 
-// Overlaps reports whether r and other share at least one date.
+// Overlaps reports whether r and r2 share at least one date.
 // Adjacent ranges share no dates.
-func (r DateRange) Overlaps(other DateRange) bool {
-	return r.start.Before(other.end) && other.start.Before(r.end)
+func (r DateRange) Overlaps(r2 DateRange) bool {
+	return r.start.Before(r2.end) && r2.start.Before(r.end)
 }
 
 // Merge returns the union of two overlapping or adjacent ranges.
 // A gap between the ranges yields the zero value and false.
-func (r DateRange) Merge(other DateRange) (DateRange, bool) {
-	if r.end.Before(other.start) || other.end.Before(r.start) {
+func (r DateRange) Merge(r2 DateRange) (DateRange, bool) {
+	if r.end.Before(r2.start) || r2.end.Before(r.start) {
 		return DateRange{}, false
 	}
 
-	if other.start.Before(r.start) {
-		r.start = other.start
+	if r2.start.Before(r.start) {
+		r.start = r2.start
 	}
 
-	if other.end.After(r.end) {
-		r.end = other.end
+	if r2.end.After(r.end) {
+		r.end = r2.end
 	}
 
 	return r, true
 }
 
-// Compare orders ranges for sorting by start date, then by end date.
+// Intersect returns the range of the dates that r and r2 share. Ranges that
+// share none, adjacent ones included, yield the zero value and false.
+func (r DateRange) Intersect(r2 DateRange) (DateRange, bool) {
+	if !r.Overlaps(r2) {
+		return DateRange{}, false
+	}
+
+	if r2.start.After(r.start) {
+		r.start = r2.start
+	}
+
+	if r2.end.Before(r.end) {
+		r.end = r2.end
+	}
+
+	return r, true
+}
+
+// Compare orders two ranges for sorting by start date, then by end date.
 // The result is negative, zero or positive as in Date.Compare.
-func (r DateRange) Compare(other DateRange) int {
-	return cmp.Or(r.start.Compare(other.start), r.end.Compare(other.end))
+func (r DateRange) Compare(r2 DateRange) int {
+	return cmp.Or(r.start.Compare(r2.start), r.end.Compare(r2.end))
 }
 
 // String returns [start,end), with each endpoint formatted by Date.String.
-// Years outside 0000..9999 use the expanded form.
 func (r DateRange) String() string {
 	return string(r.appendTo(make([]byte, 0, dateRangeTextLen)))
 }
 
-// AppendText appends the text accepted by NewDateRangeFromString to b.
-// An endpoint year outside 0000..9999 returns b and an error.
+// AppendText appends the String form of the range to b and returns the
+// extended slice. It makes DateRange an encoding.TextAppender.
+//
+// For the zero DateRange, which is not valid, it returns b unchanged and an
+// error.
 func (r DateRange) AppendText(b []byte) ([]byte, error) {
-	if err := r.checkEncodable(); err != nil {
-		return b, err
+	if !r.IsValid() {
+		return b, errors.New("cannot marshal the zero DateRange")
 	}
 
 	return r.appendTo(b), nil
 }
 
-// MarshalText returns the range text, also used for JSON map keys.
-// It returns the same errors as AppendText.
+// MarshalText returns the String form of the range. It returns the same
+// errors as AppendText. It makes DateRange an encoding.TextMarshaler, which
+// encoding/json uses for map keys.
 func (r DateRange) MarshalText() ([]byte, error) {
-	return r.AppendText(nil)
+	return r.AppendText(make([]byte, 0, dateRangeTextLen))
 }
 
-// UnmarshalText sets r to the range read by NewDateRangeFromString.
-// It assigns only after both bounds and their order have been checked.
+// UnmarshalText sets r to the range that NewDateRangeFromString reads from
+// text. If the text is not a range, it returns the error and leaves r as it
+// was. It makes *DateRange an encoding.TextUnmarshaler.
 func (r *DateRange) UnmarshalText(text []byte) error {
 	parsed, err := NewDateRangeFromString(string(text))
 	if err != nil {
@@ -146,39 +185,42 @@ func (r *DateRange) UnmarshalText(text []byte) error {
 	return nil
 }
 
-// MarshalJSON writes an object with start and end date strings. The start
-// is inclusive and the end is exclusive. An endpoint year outside 0000..9999
-// returns an error.
+// MarshalJSON returns the range as an object with the two dates:
+// {"start":"2026-06-01","end":"2026-07-01"}. The start is inclusive and the
+// end is exclusive. It returns the same errors as AppendText. It makes
+// DateRange a json.Marshaler.
 func (r DateRange) MarshalJSON() ([]byte, error) {
-	if err := r.checkEncodable(); err != nil {
-		return nil, err
+	if !r.IsValid() {
+		return nil, errors.New("cannot marshal the zero DateRange")
 	}
 
-	return r.appendJSON(nil), nil
+	return r.appendJSON(make([]byte, 0, dateRangeJSONLen)), nil
 }
 
-// UnmarshalJSON reads an object with two required date strings, start and end.
-// JSON null preserves r. A malformed or incomplete object returns an error
-// before assigning to r.
+// UnmarshalJSON sets r from an object with a start and an end field, both
+// required, as NewDateRange would build it. On error r is unchanged. A JSON
+// null leaves r unchanged and is not an error. It makes *DateRange a
+// json.Unmarshaler.
 func (r *DateRange) UnmarshalJSON(data []byte) error {
-	var bounds *dateRangeJSON
-	if err := json.Unmarshal(data, &bounds); err != nil {
+	// A pointer target leaves the decoder to recognize null.
+	var raw *dateRangeJSON
+	if err := json.Unmarshal(data, &raw); err != nil {
 		return fmt.Errorf("invalid date range: %w", err)
 	}
 
-	if bounds == nil { // JSON null preserves the receiver.
+	if raw == nil {
 		return nil
 	}
 
-	if bounds.Start == nil {
+	if raw.Start == nil {
 		return errors.New("invalid date range: start is required")
 	}
 
-	if bounds.End == nil {
+	if raw.End == nil {
 		return errors.New("invalid date range: end is required")
 	}
 
-	parsed, err := NewDateRange(*bounds.Start, *bounds.End)
+	parsed, err := NewDateRange(*raw.Start, *raw.End)
 	if err != nil {
 		return fmt.Errorf("invalid date range: %w", err)
 	}
@@ -204,18 +246,8 @@ func (r DateRange) validate() error {
 	return nil
 }
 
-func (r DateRange) checkEncodable() error {
-	// The endpoints are ordered, so these bounds cover both years.
-	if r.start.Year() < 0 || r.end.Year() > 9999 {
-		return errors.New("cannot marshal date range: endpoint years must be in 0000..9999")
-	}
-
-	return nil
-}
-
-// appendTo uses the endpoint formatters directly so AppendText can reuse its buffer.
+// appendTo appends the String form of the range to b.
 func (r DateRange) appendTo(b []byte) []byte {
-	b = slices.Grow(b, dateRangeTextLen)
 	b = append(b, '[')
 	b = r.start.appendTo(b)
 	b = append(b, ',')
@@ -224,9 +256,9 @@ func (r DateRange) appendTo(b []byte) []byte {
 	return append(b, ')')
 }
 
-// appendJSON can quote each date directly because its text contains only digits and hyphens.
+// appendJSON appends the JSON object form of the range to b. It quotes each
+// date as it is, because the text of a date holds only digits and hyphens.
 func (r DateRange) appendJSON(b []byte) []byte {
-	b = slices.Grow(b, 2*dateLen+len(`{"start":"","end":""}`))
 	b = append(b, `{"start":"`...)
 	b = r.start.appendTo(b)
 	b = append(b, `","end":"`...)
@@ -235,6 +267,8 @@ func (r DateRange) appendJSON(b []byte) []byte {
 	return append(b, '"', '}')
 }
 
+// dateRangeJSON is the JSON object form of a DateRange. The fields are
+// pointers so that decoding can tell a missing field from an empty one.
 type dateRangeJSON struct {
 	// Start is the inclusive start. Nil detects an absent or null JSON field.
 	Start *Date `json:"start"`

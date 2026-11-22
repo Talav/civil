@@ -3,7 +3,6 @@ package civil
 import (
 	"cmp"
 	"database/sql/driver"
-	"errors"
 	"fmt"
 	"time"
 )
@@ -92,7 +91,7 @@ func (t Time) Nanosecond() int { return t.nanosecond }
 // String returns the time as HH:MM:SS. A time with a non-zero nanosecond gets
 // a point and all nine fraction digits: 09:30:00.250000000.
 func (t Time) String() string {
-	return string(t.appendTo(make([]byte, 0, len(time.TimeOnly))))
+	return string(t.appendTo(make([]byte, 0, hourMinuteSecondLen)))
 }
 
 // Before reports whether t is earlier in the day than t2.
@@ -126,7 +125,7 @@ func (t Time) AppendText(b []byte) ([]byte, error) {
 // Time an encoding.TextMarshaler, which encoding/json uses for values and for
 // map keys.
 func (t Time) MarshalText() ([]byte, error) {
-	return t.appendTo(make([]byte, 0, len(time.TimeOnly))), nil
+	return t.appendTo(make([]byte, 0, hourMinuteSecondLen)), nil
 }
 
 // UnmarshalText sets t to the time that NewTimeFromString reads from text. If
@@ -156,20 +155,7 @@ func (t Time) Value() (driver.Value, error) {
 // in a format that NewTimeFromString accepts. NULL is an error; scan a
 // nullable column into a sql.Null[Time]. On error t is unchanged.
 func (t *Time) Scan(src any) error {
-	switch value := src.(type) {
-	case time.Time:
-		*t = NewTimeFromTime(value)
-
-		return nil
-	case string:
-		return t.UnmarshalText([]byte(value))
-	case []byte:
-		return t.UnmarshalText(value)
-	case nil:
-		return errors.New("invalid time: NULL")
-	default:
-		return fmt.Errorf("invalid time: unsupported type %T", src)
-	}
+	return scan(t, src, "time", "15:04:05.999999999")
 }
 
 func (t Time) validate() error {
@@ -217,32 +203,40 @@ func parseTime(s string) (Time, bool) {
 		return Time{}, false
 	}
 
-	ok := s[2] == ':'
-	part := func(digits string) int {
-		value, isDigits := parseDigits(digits)
-		ok = ok && isDigits
-
-		return value
-	}
-
-	t := Time{hour: part(s[0:2]), minute: part(s[3:5])}
+	hour, hourOK := parseDigits(s[0:2])
+	minute, minuteOK := parseDigits(s[3:hourMinuteLen])
+	t := Time{hour: hour, minute: minute}
+	ok := s[2] == ':' && hourOK && minuteOK
 
 	if n >= hourMinuteSecondLen {
-		ok = ok && s[hourMinuteLen] == ':'
-		t.second = part(s[hourMinuteLen+1 : hourMinuteSecondLen])
+		second, secondOK := parseDigits(s[hourMinuteLen+1 : hourMinuteSecondLen])
+		t.second = second
+		ok = ok && s[hourMinuteLen] == ':' && secondOK
 	}
 
 	if n >= shortestFractionLen {
-		ok = ok && s[hourMinuteSecondLen] == '.'
-		t.nanosecond = part(s[hourMinuteSecondLen+1:])
-
-		// Fewer than nine fraction digits leave out trailing zeros.
-		for range longestFractionLen - n {
-			t.nanosecond *= 10
-		}
+		nanosecond, fractionOK := parseFraction(s[hourMinuteSecondLen:])
+		t.nanosecond = nanosecond
+		ok = ok && fractionOK
 	}
 
 	return t, ok
+}
+
+// parseFraction reads the fraction of a second, a point and one to nine
+// digits, and returns it in nanoseconds.
+func parseFraction(s string) (int, bool) {
+	nanosecond, ok := parseDigits(s[1:])
+	if s[0] != '.' || !ok {
+		return 0, false
+	}
+
+	// Fewer than nine fraction digits leave out trailing zeros.
+	for range len(".") + fractionDigits - len(s) {
+		nanosecond *= 10
+	}
+
+	return nanosecond, true
 }
 
 // isTimeLen reports whether n is the length of one of the accepted shapes.

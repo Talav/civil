@@ -227,6 +227,7 @@ func TestTimeScan(t *testing.T) {
 		wantErr string
 	}{
 		{name: "time", src: time.Date(2026, time.March, 9, 14, 30, 0, 0, time.UTC), want: clock(t, 14, 30, 0, 0)},
+		{name: "time with a fraction", src: time.Date(2026, time.March, 9, 14, 30, 0, 1, time.UTC), want: clock(t, 14, 30, 0, 1)},
 		{name: "string", src: "14:30:00", want: clock(t, 14, 30, 0, 0)},
 		{name: "bytes", src: []byte("14:30:00"), want: clock(t, 14, 30, 0, 0)},
 		{name: "null", src: nil, wantErr: "invalid time: NULL"},

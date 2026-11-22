@@ -9,6 +9,13 @@ import (
 )
 
 const (
+	// dateLen is the length of the text of a date, YYYY-MM-DD.
+	dateLen = len(time.DateOnly)
+
+	// maxYear is the last year a Date can have, the last that the four digits
+	// of the text write. The first is year 0.
+	maxYear = 9999
+
 	monthsPerYear = 12
 
 	// The day arithmetic works in 400-year eras that start on March 1, so the
@@ -25,18 +32,17 @@ const (
 // year.
 var daysInMonth = [...]int{31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}
 
-// A Date is a calendar day (year, month, day).
+// A Date is a calendar day (year, month, day) in the years 0 to 9999.
 //
 // A Date comes only from a constructor or from arithmetic on another Date, so
 // it always names a day that exists; there is no February 30. Dates are
 // comparable with == and usable as map keys.
 //
 // The zero value is the one exception: it is not a day. It stands for a
-// missing date, IsValid reports false for it, and other methods are
+// missing one, IsValid reports false for it, and other methods are
 // meaningless on it.
 type Date struct {
-	// year is the calendar year. Year 0 comes before year 1, and negative
-	// years before that.
+	// year is the calendar year, 0 to 9999.
 	year int
 
 	// month is the month of the year, January through December.
@@ -48,9 +54,9 @@ type Date struct {
 
 // NewDate returns the date with the given year, month and day.
 //
-// It returns an error if the month is not January through December or the
-// day does not exist in that month. It never normalizes: February 30 is an
-// error, not March 1 or 2.
+// It returns an error if the year is not 0 to 9999, the month is not January
+// through December or the day does not exist in that month. It never
+// normalizes: February 30 is an error, not March 1 or 2.
 func NewDate(year int, month time.Month, day int) (Date, error) {
 	d := Date{year: year, month: month, day: day}
 	if err := d.validate(); err != nil {
@@ -60,31 +66,23 @@ func NewDate(year int, month time.Month, day int) (Date, error) {
 	return d, nil
 }
 
-// NewDateFromTime returns the date on which t falls in t's own location. Any
-// time.Time falls on an existing day, so it cannot fail.
-func NewDateFromTime(t time.Time) Date {
-	year, month, day := t.Date()
-
-	return Date{year: year, month: month, day: day}
+// NewDateFromTime returns the date on which t falls in t's own location.
+//
+// It returns an error if t is in a year outside 0 to 9999, which a time.Time
+// can hold and a Date cannot.
+func NewDateFromTime(t time.Time) (Date, error) {
+	return NewDate(t.Date())
 }
 
 // NewDateFromString returns the date written in s as YYYY-MM-DD, the RFC 3339
-// full-date format and the form that String produces for years 0 to 9999.
+// full-date format and the form that String produces.
 func NewDateFromString(s string) (Date, error) {
-	if len(s) != len(time.DateOnly) || s[4] != '-' || s[7] != '-' {
+	d, ok := parseDate(s)
+	if !ok {
 		return Date{}, fmt.Errorf("invalid date %q: must be YYYY-MM-DD", s)
 	}
 
-	year, yearOK := parseDigits(s[0:4])
-	month, monthOK := parseDigits(s[5:7])
-	day, dayOK := parseDigits(s[8:10])
-
-	if !yearOK || !monthOK || !dayOK {
-		return Date{}, fmt.Errorf("invalid date %q: must be YYYY-MM-DD", s)
-	}
-
-	d, err := NewDate(year, time.Month(month), day)
-	if err != nil {
+	if err := d.validate(); err != nil {
 		return Date{}, fmt.Errorf("invalid date %q: %w", s, err)
 	}
 
@@ -108,17 +106,14 @@ func (d Date) Weekday() time.Weekday {
 }
 
 // IsValid reports whether d is a day. It is false only for the zero value,
-// which stands for a missing date; every Date from a constructor is valid.
+// which stands for a missing one. Every valid Date can be encoded.
 func (d Date) IsValid() bool {
 	return d != Date{}
 }
 
 // String returns the date as YYYY-MM-DD.
-//
-// A year outside 0 to 9999 is written with a sign and all its digits, as in
-// ISO 8601: +10000-01-01. NewDateFromString does not read that form.
 func (d Date) String() string {
-	return string(d.appendTo(make([]byte, 0, len(time.DateOnly))))
+	return string(d.appendTo(make([]byte, 0, dateLen)))
 }
 
 // In returns the instant at which the date starts in loc: the result of
@@ -142,37 +137,58 @@ func (d Date) At(t Time, loc *time.Location) time.Time {
 }
 
 // AddDays returns the date n days after d. A negative n goes into the past.
-func (d Date) AddDays(n int) Date {
-	return newDateFromDayNumber(d.dayNumber() + int64(n))
+//
+// It returns an error if the day is outside the years 0 to 9999.
+func (d Date) AddDays(n int) (Date, error) {
+	sum := newDateFromDayNumber(d.dayNumber() + int64(n))
+	if err := sum.validate(); err != nil {
+		return Date{}, fmt.Errorf("add %d days to %s: %w", n, d, err)
+	}
+
+	return sum, nil
 }
 
 // AddMonths returns the date n calendar months after d. A negative n goes
 // into the past.
 //
+// It returns an error if the day is outside the years 0 to 9999.
+//
 // The day of the month is kept. When the target month is too short for it,
 // the surplus days run on into the following month: January 31 plus one month
 // is March 3, or March 2 in a leap year. time.Time.AddDate does the same.
-func (d Date) AddMonths(n int) Date {
+func (d Date) AddMonths(n int) (Date, error) {
 	// Count months from January of year 0, so one division splits the sum
 	// back into a year and a month for any sign of n.
 	months := int64(d.year)*monthsPerYear + int64(d.month-time.January) + int64(n)
 	year := floorDiv(months, monthsPerYear)
 	month := time.January + time.Month(months-year*monthsPerYear)
 
-	return Date{year: int(year), month: month, day: 1}.AddDays(d.day - 1)
+	sum, err := d.sameDayOf(int(year), month)
+	if err != nil {
+		return Date{}, fmt.Errorf("add %d months to %s: %w", n, d, err)
+	}
+
+	return sum, nil
 }
 
 // AddYears returns the date n calendar years after d. A negative n goes into
 // the past.
 //
+// It returns an error if the day is outside the years 0 to 9999.
+//
 // The month and day are kept. February 29 moved to a year without one becomes
 // March 1, as with time.Time.AddDate.
-func (d Date) AddYears(n int) Date {
-	return Date{year: d.year + n, month: d.month, day: 1}.AddDays(d.day - 1)
+func (d Date) AddYears(n int) (Date, error) {
+	sum, err := d.sameDayOf(d.year+n, d.month)
+	if err != nil {
+		return Date{}, fmt.Errorf("add %d years to %s: %w", n, d, err)
+	}
+
+	return sum, nil
 }
 
 // DaysSince returns how many days d is after d2; the result is negative when
-// d is before d2. For any two dates, d2.AddDays(d.DaysSince(d2)) == d.
+// d is before d2. For any two dates, d2.AddDays(d.DaysSince(d2)) gives d.
 func (d Date) DaysSince(d2 Date) int {
 	return int(d.dayNumber() - d2.dayNumber())
 }
@@ -198,16 +214,22 @@ func (d Date) Compare(d2 Date) int {
 }
 
 // AppendText appends the String form of the date to b and returns the
-// extended slice. It never fails. It makes Date an encoding.TextAppender.
+// extended slice. It makes Date an encoding.TextAppender.
+//
+// For the zero Date, which is not valid, it returns b unchanged and an error.
 func (d Date) AppendText(b []byte) ([]byte, error) {
+	if !d.IsValid() {
+		return b, errors.New("cannot marshal the zero Date")
+	}
+
 	return d.appendTo(b), nil
 }
 
-// MarshalText returns the String form of the date. It never fails. It makes
-// Date an encoding.TextMarshaler, which encoding/json uses for values and for
-// map keys.
+// MarshalText returns the String form of the date. It returns the same errors
+// as AppendText. It makes Date an encoding.TextMarshaler, which encoding/json
+// uses for values and for map keys.
 func (d Date) MarshalText() ([]byte, error) {
-	return d.appendTo(make([]byte, 0, len(time.DateOnly))), nil
+	return d.AppendText(make([]byte, 0, dateLen))
 }
 
 // UnmarshalText sets d to the date that NewDateFromString reads from text. If
@@ -225,35 +247,32 @@ func (d *Date) UnmarshalText(text []byte) error {
 }
 
 // Value returns the String form of the date for use as a query argument. It
-// makes Date a driver.Valuer.
+// returns the same errors as AppendText. It makes Date a driver.Valuer.
 func (d Date) Value() (driver.Value, error) {
-	return d.String(), nil
+	text, err := d.MarshalText()
+	if err != nil {
+		return nil, err
+	}
+
+	return string(text), nil
 }
 
 // Scan sets d from a database column value. It makes *Date a sql.Scanner.
 //
 // Drivers deliver a DATE column in one of three forms. From a time.Time, Scan
 // takes the date in that time's location. A string or []byte must be in the
-// format that NewDateFromString accepts. NULL is an error; scan a nullable
-// column into a sql.Null[Date]. On error d is unchanged.
+// format that NewDateFromString accepts. A time in a year outside 0 to 9999
+// is an error, and so is NULL; scan a nullable column into a sql.Null[Date].
+// On error d is unchanged.
 func (d *Date) Scan(src any) error {
-	switch value := src.(type) {
-	case time.Time:
-		*d = NewDateFromTime(value)
-
-		return nil
-	case string:
-		return d.UnmarshalText([]byte(value))
-	case []byte:
-		return d.UnmarshalText(value)
-	case nil:
-		return errors.New("invalid date: NULL")
-	default:
-		return fmt.Errorf("invalid date: unsupported type %T", src)
-	}
+	return scan(d, src, "date", time.DateOnly)
 }
 
 func (d Date) validate() error {
+	if d.year < 0 || d.year > maxYear {
+		return fmt.Errorf("year %d must be in 0..%d", d.year, maxYear)
+	}
+
 	if d.month < time.January || d.month > time.December {
 		return fmt.Errorf("month %d must be in 1..12", int(d.month))
 	}
@@ -268,6 +287,19 @@ func (d Date) validate() error {
 	}
 
 	return nil
+}
+
+// sameDayOf returns the date that d's day of the month falls on in the given
+// month, counting on from the first of that month when it is too short.
+func (d Date) sameDayOf(year int, month time.Month) (Date, error) {
+	// A first of the month outside the years of a Date cannot count on into
+	// them.
+	first, err := NewDate(year, month, 1)
+	if err != nil {
+		return Date{}, err
+	}
+
+	return first.AddDays(d.day - 1)
 }
 
 // dayNumber returns the number of days from January 1 of year 1 to the date,
@@ -296,12 +328,26 @@ func (d Date) dayNumber() int64 {
 
 // appendTo appends the String form of the date to b.
 func (d Date) appendTo(b []byte) []byte {
-	b = appendYear(b, d.year)
+	b = appendPadded(b, d.year, 4)
 	b = append(b, '-')
 	b = appendPadded(b, int(d.month), 2)
 	b = append(b, '-')
 
 	return appendPadded(b, d.day, 2)
+}
+
+// parseDate reads the parts of a date from s without checking their ranges.
+// It reports false if s does not have the shape YYYY-MM-DD.
+func parseDate(s string) (Date, bool) {
+	if len(s) != dateLen || s[4] != '-' || s[7] != '-' {
+		return Date{}, false
+	}
+
+	year, yearOK := parseDigits(s[0:4])
+	month, monthOK := parseDigits(s[5:7])
+	day, dayOK := parseDigits(s[8:10])
+
+	return Date{year: year, month: time.Month(month), day: day}, yearOK && monthOK && dayOK
 }
 
 // newDateFromDayNumber returns the date with the given day number. It is the
@@ -341,17 +387,4 @@ func floorDiv(a, b int64) int64 {
 	}
 
 	return quotient
-}
-
-// appendYear appends year with at least four digits. A year outside 0 to 9999
-// gets an explicit sign, the ISO 8601 expanded form.
-func appendYear(b []byte, year int) []byte {
-	if year < 0 {
-		b = append(b, '-')
-		year = -year
-	} else if year > 9999 {
-		b = append(b, '+')
-	}
-
-	return appendPadded(b, year, 4)
 }

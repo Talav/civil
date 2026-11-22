@@ -8,22 +8,16 @@ import (
 	"time"
 )
 
-const (
-	// dateLen is the length of the date at the start of a datetime's text, and
-	// so the position of the separator between the date and the time.
-	dateLen = len(time.DateOnly)
-
-	// dateTimeLen is the length of the String form of a datetime that has no
-	// fraction of a second.
-	dateTimeLen = len("2006-01-02T15:04:05")
-)
+// dateTimeLen is the length of the String form of a datetime that has no
+// fraction of a second.
+const dateTimeLen = dateLen + len("T") + hourMinuteSecondLen
 
 // A DateTime is a calendar day together with a time of day, with no time
 // zone: what a calendar and a wall clock show at some moment, without saying
 // where.
 //
 // A DateTime comes only from a constructor, so its date is a day that exists
-// and its time is in range. DateTimes are comparable with == and usable as
+// in the years 0 to 9999 and its time is in range. DateTimes are comparable with == and usable as
 // map keys.
 //
 // The zero value is the one exception: it has no date, so it is not a
@@ -50,9 +44,17 @@ func NewDateTime(d Date, t Time) (DateTime, error) {
 }
 
 // NewDateTimeFromTime returns the date and the time of day that t shows in
-// t's own location. Any time.Time shows both, so it cannot fail.
-func NewDateTimeFromTime(t time.Time) DateTime {
-	return DateTime{date: NewDateFromTime(t), time: NewTimeFromTime(t)}
+// t's own location.
+//
+// It returns an error if t is in a year outside 0 to 9999, which a time.Time
+// can hold and a DateTime cannot.
+func NewDateTimeFromTime(t time.Time) (DateTime, error) {
+	d, err := NewDateFromTime(t)
+	if err != nil {
+		return DateTime{}, err
+	}
+
+	return NewDateTime(d, NewTimeFromTime(t))
 }
 
 // NewDateTimeFromString returns the datetime written in s: a date as
@@ -60,8 +62,9 @@ func NewDateTimeFromTime(t time.Time) DateTime {
 // reads it, such as 2026-03-09T09:30:00. A space is accepted in place of the
 // T, which is how databases write a timestamp.
 func NewDateTimeFromString(s string) (DateTime, error) {
+	// The date has a fixed length, so the separator is always at dateLen.
 	if len(s) <= dateLen || (s[dateLen] != 'T' && s[dateLen] != ' ') {
-		return DateTime{}, fmt.Errorf("invalid datetime %q: must be YYYY-MM-DDTHH:MM:SS", s)
+		return DateTime{}, fmt.Errorf("invalid datetime %q: must be YYYY-MM-DD followed by T or a space and a time of day", s)
 	}
 
 	d, err := NewDateFromString(s[:dateLen])
@@ -84,8 +87,7 @@ func (dt DateTime) Date() Date { return dt.date }
 func (dt DateTime) Time() Time { return dt.time }
 
 // IsValid reports whether dt is a datetime. It is false only for the zero
-// value, which stands for a missing one; every DateTime from a constructor
-// is valid.
+// value, which stands for a missing one. Every valid DateTime can be encoded.
 func (dt DateTime) IsValid() bool {
 	return dt.date.IsValid()
 }
@@ -125,16 +127,23 @@ func (dt DateTime) Compare(dt2 DateTime) int {
 }
 
 // AppendText appends the String form of the datetime to b and returns the
-// extended slice. It never fails. It makes DateTime an encoding.TextAppender.
+// extended slice. It makes DateTime an encoding.TextAppender.
+//
+// For the zero DateTime, which is not valid, it returns b unchanged and an
+// error.
 func (dt DateTime) AppendText(b []byte) ([]byte, error) {
+	if !dt.IsValid() {
+		return b, errors.New("cannot marshal the zero DateTime")
+	}
+
 	return dt.appendTo(b), nil
 }
 
-// MarshalText returns the String form of the datetime. It never fails. It
-// makes DateTime an encoding.TextMarshaler, which encoding/json uses for
-// values and for map keys.
+// MarshalText returns the String form of the datetime. It returns the same
+// errors as AppendText. It makes DateTime an encoding.TextMarshaler, which
+// encoding/json uses for values and for map keys.
 func (dt DateTime) MarshalText() ([]byte, error) {
-	return dt.appendTo(make([]byte, 0, dateTimeLen)), nil
+	return dt.AppendText(make([]byte, 0, dateTimeLen))
 }
 
 // UnmarshalText sets dt to the datetime that NewDateTimeFromString reads from
@@ -152,9 +161,15 @@ func (dt *DateTime) UnmarshalText(text []byte) error {
 }
 
 // Value returns the String form of the datetime for use as a query argument.
-// It makes DateTime a driver.Valuer.
+// It returns the same errors as AppendText. It makes DateTime a
+// driver.Valuer.
 func (dt DateTime) Value() (driver.Value, error) {
-	return dt.String(), nil
+	text, err := dt.MarshalText()
+	if err != nil {
+		return nil, err
+	}
+
+	return string(text), nil
 }
 
 // Scan sets dt from a database column value. It makes *DateTime a
@@ -162,24 +177,11 @@ func (dt DateTime) Value() (driver.Value, error) {
 //
 // Drivers deliver a timestamp column in one of three forms. From a time.Time,
 // Scan takes the date and the time of day in that time's location. A string
-// or []byte must be in a format that NewDateTimeFromString accepts. NULL is
-// an error; scan a nullable column into a sql.Null[DateTime]. On error dt is
-// unchanged.
+// or []byte must be in a format that NewDateTimeFromString accepts. A time in
+// a year outside 0 to 9999 is an error, and so is NULL; scan a nullable
+// column into a sql.Null[DateTime]. On error dt is unchanged.
 func (dt *DateTime) Scan(src any) error {
-	switch value := src.(type) {
-	case time.Time:
-		*dt = NewDateTimeFromTime(value)
-
-		return nil
-	case string:
-		return dt.UnmarshalText([]byte(value))
-	case []byte:
-		return dt.UnmarshalText(value)
-	case nil:
-		return errors.New("invalid datetime: NULL")
-	default:
-		return fmt.Errorf("invalid datetime: unsupported type %T", src)
-	}
+	return scan(dt, src, "datetime", "2006-01-02T15:04:05.999999999")
 }
 
 func (dt DateTime) validate() error {
