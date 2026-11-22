@@ -11,7 +11,7 @@ Calendar dates, times of day and date ranges for Go. Use them for birthdays, bus
 ## Features
 
 - **No normalizing**: an out-of-range part is rejected, never rolled over into the next month or hour
-- **Comparable**: values work with `==` and as map keys
+- **Comparable**: values work with `==` and as map keys (`LocationDate` uses `Equal` instead)
 - **Text, JSON and SQL**: `encoding.TextMarshaler`, `encoding.TextAppender`, `driver.Valuer` and `sql.Scanner`
 
 ## Installation
@@ -57,6 +57,18 @@ fmt.Println(start.In(newYork).UTC()) // 2026-06-01 04:00:00 +0000 UTC
 
 A wall time that a zone skips or repeats on that day (a daylight saving change) has no single instant. These methods return whatever `time.Date` picks.
 
+### LocationDate
+
+A `LocationDate` is a `Date` in a named time zone.
+
+```go
+day, err := civil.NewLocationDate(start, "America/New_York")
+if err != nil {
+    return err
+}
+fmt.Println(day) // 2026-06-01[America/New_York]
+```
+
 ### JSON
 
 ```json
@@ -64,7 +76,8 @@ A wall time that a zone skips or repeats on that day (a daylight saving change) 
   "day": "2026-06-01",
   "open": "09:30:00",
   "appointment": "2026-06-01T09:30:00",
-  "period": {"start": "2026-06-01", "end": "2026-07-01"}
+  "period": {"start": "2026-06-01", "end": "2026-07-01"},
+  "deadline": {"date": "2026-06-01", "timeZone": "America/New_York"}
 }
 ```
 
@@ -84,7 +97,7 @@ Bind `r.Start()` and `r.End()` on writes. On reads, scan into two `civil.Date` v
 
 ## Zero Values
 
-- The zero values of `Date`, `DateTime` and `DateRange` represent missing values. Check them with `IsValid()`.
+- The zero values of `Date`, `DateTime`, `DateRange` and `LocationDate` represent missing values. Check them with `IsValid()`.
 - `civil.Time{}` is midnight, a real time of day, so `Time` has no `IsValid`.
 
 ## Testing

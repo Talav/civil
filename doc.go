@@ -8,5 +8,7 @@
 // them with a location into an instant, and NewDateFromTime, NewTimeFromTime
 // and NewDateTimeFromTime split an instant back up.
 //
+// A LocationDate is the one type that has a time zone: a Date in a named zone.
+//
 // Dates are counted in the proleptic Gregorian calendar.
 package civil
