@@ -116,8 +116,7 @@ func TestNewDateTimeFromTime(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got, err := civil.NewDateTimeFromTime(tt.time)
-			require.NoError(t, err)
+			got := civil.NewDateTimeFromTime(tt.time)
 
 			assert.Equal(t, tt.want, got)
 			assert.True(t, tt.time.Equal(got.In(tt.time.Location())), "In must give the instant back")
@@ -149,10 +148,9 @@ func TestNewDateTimeFromTimeOutOfRange(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got, err := civil.NewDateTimeFromTime(tt.time)
+			_, err := civil.NewDateTimeFromTime(tt.time).MarshalText()
 
 			require.EqualError(t, err, tt.wantErr)
-			assert.Equal(t, civil.DateTime{}, got)
 		})
 	}
 }

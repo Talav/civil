@@ -12,8 +12,7 @@ Calendar dates, times of day and date ranges for Go. Use them for birthdays, bus
 
 - **No normalizing**: an out-of-range part is rejected, never rolled over into the next month or hour
 - **Comparable**: values work with `==` and as map keys (`LocationDate` uses `Equal` instead)
-- **One notion of validity**: `IsValid()` is false only for a missing value, and every valid value can be encoded and read back
-- **Years 0 to 9999**: the years that `YYYY` writes; constructors and arithmetic return an error for any other year
+- **One notion of validity**: `IsValid()` is false only for a missing value
 - **Text, JSON and SQL**: `encoding.TextMarshaler`, `encoding.TextAppender`, `driver.Valuer` and `sql.Scanner`
 
 ## Installation
@@ -40,10 +39,7 @@ start, err := civil.NewDate(2026, time.June, 1)
 if err != nil {
     return err
 }
-end, err := start.AddMonths(1)
-if err != nil {
-    return err
-}
+end := start.AddMonths(1)
 june, err := civil.NewDateRange(start, end)
 if err != nil {
     return err

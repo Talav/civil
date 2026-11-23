@@ -12,9 +12,8 @@
 // LocationDate.At joins it with a Time into an instant.
 //
 // There is one notion of validity, and IsValid reports it. It is false only
-// for a zero value that stands for a missing one. Every valid value can be
-// encoded, and encoding an invalid one is an error.
+// for a zero value that stands for a missing one, and encoding such a value
+// is an error.
 //
-// Dates are counted in the proleptic Gregorian calendar and lie in the years
-// 0 to 9999, the years that the four digits of the text write.
+// Dates are counted in the proleptic Gregorian calendar.
 package civil

@@ -25,26 +25,18 @@ func date(t *testing.T, year int, month time.Month, day int) civil.Date {
 	return d
 }
 
-// dateOf returns the Date of a time that the test knows to be in the years of
-// a Date.
+// dateOf returns the Date of a time.
 func dateOf(t *testing.T, instant time.Time) civil.Date {
 	t.Helper()
 
-	d, err := civil.NewDateFromTime(instant)
-	require.NoError(t, err)
-
-	return d
+	return civil.NewDateFromTime(instant)
 }
 
-// plusDays returns the date days after d, which the test knows to be in the
-// years of a Date.
+// plusDays returns the date days after d.
 func plusDays(t *testing.T, d civil.Date, days int) civil.Date {
 	t.Helper()
 
-	sum, err := d.AddDays(days)
-	require.NoError(t, err)
-
-	return sum
+	return d.AddDays(days)
 }
 
 // utc returns midnight UTC of the given day, normalized the way time.Date does.
@@ -136,8 +128,8 @@ func TestNewDate(t *testing.T) {
 		{name: "first day of year 1", year: 1, month: time.January, day: 1, want: "0001-01-01"},
 		{name: "leap day of year 0", year: 0, month: time.February, day: 29, want: "0000-02-29"},
 		{name: "last four-digit day", year: 9999, month: time.December, day: 31, want: "9999-12-31"},
-		{name: "five-digit year", year: 10000, month: time.January, day: 1, wantErr: "year 10000 must be in 0..9999"},
-		{name: "negative year", year: -1, month: time.December, day: 31, wantErr: "year -1 must be in 0..9999"},
+		{name: "five-digit year", year: 10000, month: time.January, day: 1, want: "10000-01-01"},
+		{name: "negative year", year: -1, month: time.December, day: 31, want: "000-1-12-31"},
 		{name: "all zero", wantErr: "month 0 must be in 1..12"},
 		{name: "month above december", year: 2025, month: 13, day: 10, wantErr: "month 13 must be in 1..12"},
 		{name: "negative month", year: 2025, month: -3, day: 10, wantErr: "month -3 must be in 1..12"},
@@ -201,11 +193,12 @@ func TestNewDateFromTime(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got, err := civil.NewDateFromTime(tt.time)
+			got := civil.NewDateFromTime(tt.time)
 			if tt.wantErr != "" {
+				_, err := got.MarshalText()
 				require.EqualError(t, err, tt.wantErr)
-			} else {
-				require.NoError(t, err)
+
+				return
 			}
 
 			assert.Equal(t, tt.want, got)
@@ -338,15 +331,13 @@ func TestDateAddMonthsAndYearsAgreeWithTime(t *testing.T) {
 		d := dateOf(t, start)
 
 		for _, n := range offsets {
-			got, err := d.AddMonths(n)
-			require.NoError(t, err)
+			got := d.AddMonths(n)
 
 			if want := dateOf(t, start.AddDate(0, n, 0)); got != want {
 				mismatches = append(mismatches, fmt.Sprintf("%s.AddMonths(%d) = %s, want %s", d, n, got, want))
 			}
 
-			got, err = d.AddYears(n)
-			require.NoError(t, err)
+			got = d.AddYears(n)
 
 			if want := dateOf(t, start.AddDate(n, 0, 0)); got != want {
 				mismatches = append(mismatches, fmt.Sprintf("%s.AddYears(%d) = %s, want %s", d, n, got, want))
@@ -448,14 +439,12 @@ func TestDateAddDays(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got, err := tt.start.AddDays(tt.days)
-			require.NoError(t, err)
+			got := tt.start.AddDays(tt.days)
 			assert.Equal(t, tt.want, got)
 
 			assert.Equal(t, tt.days, tt.want.DaysSince(tt.start))
 
-			back, err := tt.want.AddDays(-tt.days)
-			require.NoError(t, err)
+			back := tt.want.AddDays(-tt.days)
 			assert.Equal(t, tt.start, back)
 		})
 	}
@@ -487,8 +476,7 @@ func TestDateAddMonths(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got, err := tt.start.AddMonths(tt.months)
-			require.NoError(t, err)
+			got := tt.start.AddMonths(tt.months)
 			assert.Equal(t, tt.want, got)
 		})
 	}
@@ -516,15 +504,14 @@ func TestDateAddYears(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got, err := tt.start.AddYears(tt.years)
-			require.NoError(t, err)
+			got := tt.start.AddYears(tt.years)
 			assert.Equal(t, tt.want, got)
 		})
 	}
 }
 
-// TestDateArithmeticOutOfRange checks that arithmetic gives an error, and not
-// a day, when the result would lie outside the years of a Date.
+// TestDateArithmeticOutOfRange checks that a result outside the years 0 to
+// 9999 cannot be encoded.
 func TestDateArithmeticOutOfRange(t *testing.T) {
 	t.Parallel()
 
@@ -534,35 +521,34 @@ func TestDateArithmeticOutOfRange(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		add     func(n int) (civil.Date, error)
+		add     func(n int) civil.Date
 		n       int
 		wantErr string
 	}{
-		{name: "day before the first", add: first.AddDays, n: -1, wantErr: "AddDays(-1) of 0000-01-01: year -1 must be in 0..9999"},
-		{name: "day after the last", add: last.AddDays, n: 1, wantErr: "AddDays(1) of 9999-12-31: year 10000 must be in 0..9999"},
+		{name: "day before the first", add: first.AddDays, n: -1, wantErr: "year -1 must be in 0..9999"},
+		{name: "day after the last", add: last.AddDays, n: 1, wantErr: "year 10000 must be in 0..9999"},
 		{name: "largest number of days", add: first.AddDays, n: math.MaxInt, wantErr: "must be in 0..9999"},
 		{name: "smallest number of days", add: last.AddDays, n: math.MinInt, wantErr: "must be in 0..9999"},
-		{name: "month before the first", add: first.AddMonths, n: -1, wantErr: "AddMonths(-1) of 0000-01-01: year -1 must be in 0..9999"},
-		{name: "month after the last", add: last.AddMonths, n: 1, wantErr: "AddMonths(1) of 9999-12-31: year 10000 must be in 0..9999"},
+		{name: "month before the first", add: first.AddMonths, n: -1, wantErr: "year -1 must be in 0..9999"},
+		{name: "month after the last", add: last.AddMonths, n: 1, wantErr: "year 10000 must be in 0..9999"},
 		{name: "largest number of months", add: first.AddMonths, n: math.MaxInt, wantErr: "must be in 0..9999"},
 		{name: "smallest number of months", add: last.AddMonths, n: math.MinInt, wantErr: "must be in 0..9999"},
-		{name: "year before the first", add: first.AddYears, n: -1, wantErr: "AddYears(-1) of 0000-01-01: year -1 must be in 0..9999"},
-		{name: "year after the last", add: last.AddYears, n: 1, wantErr: "AddYears(1) of 9999-12-31: year 10000 must be in 0..9999"},
+		{name: "year before the first", add: first.AddYears, n: -1, wantErr: "year -1 must be in 0..9999"},
+		{name: "year after the last", add: last.AddYears, n: 1, wantErr: "year 10000 must be in 0..9999"},
 		{name: "largest number of years", add: first.AddYears, n: math.MaxInt, wantErr: "must be in 0..9999"},
 		{name: "smallest number of years", add: last.AddYears, n: math.MinInt, wantErr: "must be in 0..9999"},
-		{name: "leap day past the last year", add: leapDay.AddYears, n: 4, wantErr: "AddYears(4) of 9996-02-29: year 10000 must be in 0..9999"},
+		{name: "leap day past the last year", add: leapDay.AddYears, n: 4, wantErr: "year 10000 must be in 0..9999"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got, err := tt.add(tt.n)
+			_, err := tt.add(tt.n).MarshalText()
 
 			// The year in the message of the largest steps depends on the
 			// size of an int, so those rows give only its end.
 			require.ErrorContains(t, err, tt.wantErr)
-			assert.Equal(t, civil.Date{}, got)
 		})
 	}
 }

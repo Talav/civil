@@ -351,6 +351,7 @@ func TestDateRangeMarshalYears(t *testing.T) {
 		wantErr string
 	}{
 		{name: "zero value", r: civil.DateRange{}, display: "[0000-00-00,0000-00-00)", wantErr: "cannot marshal the zero DateRange"},
+		{name: "end past year 9999", r: dateRange(t, last, last.AddDays(1)), display: "[9999-12-31,10000-01-01)", wantErr: "year 10000 must be in 0..9999"},
 	}
 
 	for _, tt := range tests {

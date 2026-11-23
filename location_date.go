@@ -78,8 +78,7 @@ func (ld LocationDate) Date() Date { return ld.date }
 func (ld LocationDate) Location() *time.Location { return ld.location }
 
 // IsValid reports whether ld is a day in a zone. It is false only for the zero
-// value, which stands for a missing one. Every valid LocationDate can be
-// encoded.
+// value, which stands for a missing one.
 func (ld LocationDate) IsValid() bool {
 	return ld.date.IsValid()
 }

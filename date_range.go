@@ -82,7 +82,7 @@ func (r DateRange) Start() Date { return r.start }
 func (r DateRange) End() Date { return r.end }
 
 // IsValid reports whether r is a range. It is false only for the zero value,
-// which stands for a missing one. Every valid DateRange can be encoded.
+// which stands for a missing one.
 func (r DateRange) IsValid() bool {
 	return r.start.IsValid()
 }
@@ -160,6 +160,10 @@ func (r DateRange) AppendText(b []byte) ([]byte, error) {
 		return b, errors.New("cannot marshal the zero DateRange")
 	}
 
+	if err := errors.Join(r.start.checkYear(), r.end.checkYear()); err != nil {
+		return b, err
+	}
+
 	return r.appendTo(b), nil
 }
 
@@ -191,6 +195,10 @@ func (r *DateRange) UnmarshalText(text []byte) error {
 func (r DateRange) MarshalJSON() ([]byte, error) {
 	if !r.IsValid() {
 		return nil, errors.New("cannot marshal the zero DateRange")
+	}
+
+	if err := errors.Join(r.start.checkYear(), r.end.checkYear()); err != nil {
+		return nil, err
 	}
 
 	return r.appendJSON(make([]byte, 0, dateRangeJSONLen)), nil

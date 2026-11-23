@@ -17,8 +17,8 @@ const dateTimeLen = dateLen + len("T") + hourMinuteSecondLen
 // where.
 //
 // A DateTime comes only from a constructor, so its date is a day that exists
-// in the years 0 to 9999 and its time is in range. DateTimes are comparable
-// with == and usable as map keys.
+// and its time is in range. DateTimes are comparable with == and usable as
+// map keys.
 //
 // The zero value is the one exception: it has no date, so it is not a
 // datetime. It stands for a missing one, IsValid reports false for it, and
@@ -45,16 +45,8 @@ func NewDateTime(d Date, t Time) (DateTime, error) {
 
 // NewDateTimeFromTime returns the date and the time of day that t shows in
 // t's own location.
-//
-// It returns an error if t is in a year outside 0 to 9999, which a time.Time
-// can hold and a DateTime cannot.
-func NewDateTimeFromTime(t time.Time) (DateTime, error) {
-	d, err := NewDateFromTime(t)
-	if err != nil {
-		return DateTime{}, err
-	}
-
-	return NewDateTime(d, NewTimeFromTime(t))
+func NewDateTimeFromTime(t time.Time) DateTime {
+	return DateTime{date: NewDateFromTime(t), time: NewTimeFromTime(t)}
 }
 
 // NewDateTimeFromString returns the datetime written in s: a date as
@@ -87,7 +79,7 @@ func (dt DateTime) Date() Date { return dt.date }
 func (dt DateTime) Time() Time { return dt.time }
 
 // IsValid reports whether dt is a datetime. It is false only for the zero
-// value, which stands for a missing one. Every valid DateTime can be encoded.
+// value, which stands for a missing one.
 func (dt DateTime) IsValid() bool {
 	return dt.date.IsValid()
 }
@@ -136,6 +128,10 @@ func (dt DateTime) AppendText(b []byte) ([]byte, error) {
 		return b, errors.New("cannot marshal the zero DateTime")
 	}
 
+	if err := dt.date.checkYear(); err != nil {
+		return b, err
+	}
+
 	return dt.appendTo(b), nil
 }
 
@@ -177,9 +173,9 @@ func (dt DateTime) Value() (driver.Value, error) {
 //
 // Drivers deliver a timestamp column in one of three forms. From a time.Time,
 // Scan takes the date and the time of day in that time's location. A string
-// or []byte must be in a format that NewDateTimeFromString accepts. A time in
-// a year outside 0 to 9999 is an error, and so is NULL; scan a nullable
-// column into a sql.Null[DateTime]. On error dt is unchanged.
+// or []byte must be in a format that NewDateTimeFromString accepts. NULL is
+// an error; scan a nullable column into a sql.Null[DateTime]. On error dt is
+// unchanged.
 func (dt *DateTime) Scan(src any) error {
 	return scan(dt, src, "datetime", "2006-01-02T15:04:05.999999999")
 }

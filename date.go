@@ -12,8 +12,7 @@ const (
 	// dateLen is the length of the text of a date, YYYY-MM-DD.
 	dateLen = len(time.DateOnly)
 
-	// maxYear is the last year a Date can have, the last that the four digits
-	// of the text write. The first is year 0.
+	// maxYear is the last year that the four digits of the text can write.
 	maxYear = 9999
 
 	monthsPerYear = 12
@@ -32,7 +31,7 @@ const (
 // year.
 var daysInMonth = [...]int{31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}
 
-// A Date is a calendar day (year, month, day) in the years 0 to 9999.
+// A Date is a calendar day (year, month, day).
 //
 // A Date comes only from a constructor or from arithmetic on another Date, so
 // it always names a day that exists; there is no February 30. Dates are
@@ -42,7 +41,7 @@ var daysInMonth = [...]int{31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}
 // missing one, IsValid reports false for it, and other methods are
 // meaningless on it.
 type Date struct {
-	// year is the calendar year, 0 to 9999.
+	// year is the calendar year.
 	year int
 
 	// month is the month of the year, January through December.
@@ -54,9 +53,9 @@ type Date struct {
 
 // NewDate returns the date with the given year, month and day.
 //
-// It returns an error if the year is not 0 to 9999, the month is not January
-// through December or the day does not exist in that month. It never
-// normalizes: February 30 is an error, not March 1 or 2.
+// It returns an error if the month is not January through December or the
+// day does not exist in that month. It never normalizes: February 30 is an
+// error, not March 1 or 2.
 func NewDate(year int, month time.Month, day int) (Date, error) {
 	d := Date{year: year, month: month, day: day}
 	if err := d.validate(); err != nil {
@@ -67,11 +66,10 @@ func NewDate(year int, month time.Month, day int) (Date, error) {
 }
 
 // NewDateFromTime returns the date on which t falls in t's own location.
-//
-// It returns an error if t is in a year outside 0 to 9999, which a time.Time
-// can hold and a Date cannot.
-func NewDateFromTime(t time.Time) (Date, error) {
-	return NewDate(t.Date())
+func NewDateFromTime(t time.Time) Date {
+	year, month, day := t.Date()
+
+	return Date{year: year, month: month, day: day}
 }
 
 // NewDateFromString returns the date written in s as YYYY-MM-DD, the RFC 3339
@@ -106,7 +104,7 @@ func (d Date) Weekday() time.Weekday {
 }
 
 // IsValid reports whether d is a day. It is false only for the zero value,
-// which stands for a missing one. Every valid Date can be encoded.
+// which stands for a missing one.
 func (d Date) IsValid() bool {
 	return d != Date{}
 }
@@ -137,54 +135,52 @@ func (d Date) At(t Time, loc *time.Location) time.Time {
 }
 
 // AddDays returns the date n days after d. A negative n goes into the past.
-//
-// It returns an error if the day is outside the years 0 to 9999.
-func (d Date) AddDays(n int) (Date, error) {
-	sum := newDateFromDayNumber(d.dayNumber() + int64(n))
-	if err := sum.validate(); err != nil {
-		return Date{}, fmt.Errorf("AddDays(%d) of %s: %w", n, d, err)
+func (d Date) AddDays(n int) Date {
+	// Every day number is an existing day; turning the sum back into one is
+	// the inverse of dayNumber.
+	shifted := d.dayNumber() + int64(n) + marchOffset
+	era := floorDiv(shifted, daysPerEra)
+	dayOfEra := shifted - era*daysPerEra
+	yearOfEra := (dayOfEra - dayOfEra/1460 + dayOfEra/36524 - dayOfEra/146096) / 365
+	dayOfYear := dayOfEra - (365*yearOfEra + yearOfEra/4 - yearOfEra/100)
+	// monthFromMarch counts months from March: March is 0, February is 11.
+	monthFromMarch := (5*dayOfYear + 2) / 153
+	day := dayOfYear - (153*monthFromMarch+2)/5 + 1
+
+	year := yearOfEra + era*yearsPerEra
+	month := time.March + time.Month(monthFromMarch)
+
+	if month > time.December {
+		month -= monthsPerYear
+		year++
 	}
 
-	return sum, nil
+	return Date{year: int(year), month: month, day: int(day)}
 }
 
 // AddMonths returns the date n calendar months after d. A negative n goes
 // into the past.
 //
-// It returns an error if the day is outside the years 0 to 9999.
-//
 // The day of the month is kept. When the target month is too short for it,
 // the surplus days run on into the following month: January 31 plus one month
 // is March 3, or March 2 in a leap year. time.Time.AddDate does the same.
-func (d Date) AddMonths(n int) (Date, error) {
+func (d Date) AddMonths(n int) Date {
 	// Count months from January of year 0, so one division splits the sum
 	// back into a year and a month for any sign of n.
 	months := int64(d.year)*monthsPerYear + int64(d.month-time.January) + int64(n)
 	year := floorDiv(months, monthsPerYear)
 	month := time.January + time.Month(months-year*monthsPerYear)
 
-	sum, err := d.sameDayOf(int(year), month)
-	if err != nil {
-		return Date{}, fmt.Errorf("AddMonths(%d) of %s: %w", n, d, err)
-	}
-
-	return sum, nil
+	return d.sameDayOf(int(year), month)
 }
 
 // AddYears returns the date n calendar years after d. A negative n goes into
 // the past.
 //
-// It returns an error if the day is outside the years 0 to 9999.
-//
 // The month and day are kept. February 29 moved to a year without one becomes
 // March 1, as with time.Time.AddDate.
-func (d Date) AddYears(n int) (Date, error) {
-	sum, err := d.sameDayOf(d.year+n, d.month)
-	if err != nil {
-		return Date{}, fmt.Errorf("AddYears(%d) of %s: %w", n, d, err)
-	}
-
-	return sum, nil
+func (d Date) AddYears(n int) Date {
+	return d.sameDayOf(d.year+n, d.month)
 }
 
 // DaysSince returns how many days d is after d2; the result is negative when
@@ -220,6 +216,10 @@ func (d Date) Compare(d2 Date) int {
 func (d Date) AppendText(b []byte) ([]byte, error) {
 	if !d.IsValid() {
 		return b, errors.New("cannot marshal the zero Date")
+	}
+
+	if err := d.checkYear(); err != nil {
+		return b, err
 	}
 
 	return d.appendTo(b), nil
@@ -261,18 +261,21 @@ func (d Date) Value() (driver.Value, error) {
 //
 // Drivers deliver a DATE column in one of three forms. From a time.Time, Scan
 // takes the date in that time's location. A string or []byte must be in the
-// format that NewDateFromString accepts. A time in a year outside 0 to 9999
-// is an error, and so is NULL; scan a nullable column into a sql.Null[Date].
-// On error d is unchanged.
+// format that NewDateFromString accepts. NULL is an error; scan a nullable
+// column into a sql.Null[Date]. On error d is unchanged.
 func (d *Date) Scan(src any) error {
 	return scan(d, src, "date", time.DateOnly)
 }
 
-func (d Date) validate() error {
+func (d Date) checkYear() error {
 	if d.year < 0 || d.year > maxYear {
 		return fmt.Errorf("year %d must be in 0..%d", d.year, maxYear)
 	}
 
+	return nil
+}
+
+func (d Date) validate() error {
 	if d.month < time.January || d.month > time.December {
 		return fmt.Errorf("month %d must be in 1..12", int(d.month))
 	}
@@ -291,15 +294,8 @@ func (d Date) validate() error {
 
 // sameDayOf returns the date that d's day of the month falls on in the given
 // month, counting on from the first of that month when it is too short.
-func (d Date) sameDayOf(year int, month time.Month) (Date, error) {
-	// A first of the month outside the years of a Date cannot count on into
-	// them.
-	first, err := NewDate(year, month, 1)
-	if err != nil {
-		return Date{}, err
-	}
-
-	return first.AddDays(d.day - 1)
+func (d Date) sameDayOf(year int, month time.Month) Date {
+	return Date{year: year, month: month, day: 1}.AddDays(d.day - 1)
 }
 
 // dayNumber returns the number of days from January 1 of year 1 to the date,
@@ -348,29 +344,6 @@ func parseDate(s string) (Date, bool) {
 	day, dayOK := parseDigits(s[8:10])
 
 	return Date{year: year, month: time.Month(month), day: day}, yearOK && monthOK && dayOK
-}
-
-// newDateFromDayNumber returns the date with the given day number. It is the
-// inverse of Date.dayNumber, and every day number is an existing day.
-func newDateFromDayNumber(dayNumber int64) Date {
-	shifted := dayNumber + marchOffset
-	era := floorDiv(shifted, daysPerEra)
-	dayOfEra := shifted - era*daysPerEra
-	yearOfEra := (dayOfEra - dayOfEra/1460 + dayOfEra/36524 - dayOfEra/146096) / 365
-	dayOfYear := dayOfEra - (365*yearOfEra + yearOfEra/4 - yearOfEra/100)
-	// monthFromMarch counts months from March: March is 0, February is 11.
-	monthFromMarch := (5*dayOfYear + 2) / 153
-	day := dayOfYear - (153*monthFromMarch+2)/5 + 1
-
-	year := yearOfEra + era*yearsPerEra
-	month := time.March + time.Month(monthFromMarch)
-
-	if month > time.December {
-		month -= monthsPerYear
-		year++
-	}
-
-	return Date{year: int(year), month: month, day: int(day)}
 }
 
 // isLeap reports whether year is a leap year of the Gregorian calendar.
