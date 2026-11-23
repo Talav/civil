@@ -88,7 +88,6 @@ func (r DateRange) IsValid() bool {
 }
 
 // Days returns the number of calendar days in r, as End().DaysSince(Start()).
-// The count must fit in an int.
 func (r DateRange) Days() int {
 	return r.end.DaysSince(r.start)
 }

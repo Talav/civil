@@ -44,6 +44,13 @@ type LocationDate struct {
 // The zone is loaded with time.LoadLocation, so the machine needs a time zone
 // database or the program must import time/tzdata.
 func NewLocationDate(d Date, zone string) (LocationDate, error) {
+	// The date is checked first, so a missing one costs no read of the time
+	// zone database.
+	ld := LocationDate{date: d}
+	if err := ld.validate(); err != nil {
+		return LocationDate{}, err
+	}
+
 	// time.LoadLocation reads "" as UTC, which would hide a missing name.
 	if zone == "" {
 		return LocationDate{}, errors.New("zone must not be empty")
@@ -58,10 +65,7 @@ func NewLocationDate(d Date, zone string) (LocationDate, error) {
 		return LocationDate{}, fmt.Errorf("invalid zone %q: %w", zone, err)
 	}
 
-	ld := LocationDate{date: d, location: location}
-	if err := ld.validate(); err != nil {
-		return LocationDate{}, err
-	}
+	ld.location = location
 
 	return ld, nil
 }

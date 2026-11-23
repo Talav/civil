@@ -538,19 +538,19 @@ func TestDateArithmeticOutOfRange(t *testing.T) {
 		n       int
 		wantErr string
 	}{
-		{name: "day before the first", add: first.AddDays, n: -1, wantErr: "add -1 days to 0000-01-01: year -1 must be in 0..9999"},
-		{name: "day after the last", add: last.AddDays, n: 1, wantErr: "add 1 days to 9999-12-31: year 10000 must be in 0..9999"},
+		{name: "day before the first", add: first.AddDays, n: -1, wantErr: "AddDays(-1) of 0000-01-01: year -1 must be in 0..9999"},
+		{name: "day after the last", add: last.AddDays, n: 1, wantErr: "AddDays(1) of 9999-12-31: year 10000 must be in 0..9999"},
 		{name: "largest number of days", add: first.AddDays, n: math.MaxInt, wantErr: "must be in 0..9999"},
 		{name: "smallest number of days", add: last.AddDays, n: math.MinInt, wantErr: "must be in 0..9999"},
-		{name: "month before the first", add: first.AddMonths, n: -1, wantErr: "add -1 months to 0000-01-01: year -1 must be in 0..9999"},
-		{name: "month after the last", add: last.AddMonths, n: 1, wantErr: "add 1 months to 9999-12-31: year 10000 must be in 0..9999"},
+		{name: "month before the first", add: first.AddMonths, n: -1, wantErr: "AddMonths(-1) of 0000-01-01: year -1 must be in 0..9999"},
+		{name: "month after the last", add: last.AddMonths, n: 1, wantErr: "AddMonths(1) of 9999-12-31: year 10000 must be in 0..9999"},
 		{name: "largest number of months", add: first.AddMonths, n: math.MaxInt, wantErr: "must be in 0..9999"},
 		{name: "smallest number of months", add: last.AddMonths, n: math.MinInt, wantErr: "must be in 0..9999"},
-		{name: "year before the first", add: first.AddYears, n: -1, wantErr: "add -1 years to 0000-01-01: year -1 must be in 0..9999"},
-		{name: "year after the last", add: last.AddYears, n: 1, wantErr: "add 1 years to 9999-12-31: year 10000 must be in 0..9999"},
+		{name: "year before the first", add: first.AddYears, n: -1, wantErr: "AddYears(-1) of 0000-01-01: year -1 must be in 0..9999"},
+		{name: "year after the last", add: last.AddYears, n: 1, wantErr: "AddYears(1) of 9999-12-31: year 10000 must be in 0..9999"},
 		{name: "largest number of years", add: first.AddYears, n: math.MaxInt, wantErr: "must be in 0..9999"},
 		{name: "smallest number of years", add: last.AddYears, n: math.MinInt, wantErr: "must be in 0..9999"},
-		{name: "leap day past the last year", add: leapDay.AddYears, n: 4, wantErr: "add 4 years to 9996-02-29: year 10000 must be in 0..9999"},
+		{name: "leap day past the last year", add: leapDay.AddYears, n: 4, wantErr: "AddYears(4) of 9996-02-29: year 10000 must be in 0..9999"},
 	}
 
 	for _, tt := range tests {

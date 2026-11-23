@@ -142,7 +142,7 @@ func (d Date) At(t Time, loc *time.Location) time.Time {
 func (d Date) AddDays(n int) (Date, error) {
 	sum := newDateFromDayNumber(d.dayNumber() + int64(n))
 	if err := sum.validate(); err != nil {
-		return Date{}, fmt.Errorf("add %d days to %s: %w", n, d, err)
+		return Date{}, fmt.Errorf("AddDays(%d) of %s: %w", n, d, err)
 	}
 
 	return sum, nil
@@ -165,7 +165,7 @@ func (d Date) AddMonths(n int) (Date, error) {
 
 	sum, err := d.sameDayOf(int(year), month)
 	if err != nil {
-		return Date{}, fmt.Errorf("add %d months to %s: %w", n, d, err)
+		return Date{}, fmt.Errorf("AddMonths(%d) of %s: %w", n, d, err)
 	}
 
 	return sum, nil
@@ -181,7 +181,7 @@ func (d Date) AddMonths(n int) (Date, error) {
 func (d Date) AddYears(n int) (Date, error) {
 	sum, err := d.sameDayOf(d.year+n, d.month)
 	if err != nil {
-		return Date{}, fmt.Errorf("add %d years to %s: %w", n, d, err)
+		return Date{}, fmt.Errorf("AddYears(%d) of %s: %w", n, d, err)
 	}
 
 	return sum, nil

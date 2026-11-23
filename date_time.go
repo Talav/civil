@@ -17,8 +17,8 @@ const dateTimeLen = dateLen + len("T") + hourMinuteSecondLen
 // where.
 //
 // A DateTime comes only from a constructor, so its date is a day that exists
-// in the years 0 to 9999 and its time is in range. DateTimes are comparable with == and usable as
-// map keys.
+// in the years 0 to 9999 and its time is in range. DateTimes are comparable
+// with == and usable as map keys.
 //
 // The zero value is the one exception: it has no date, so it is not a
 // datetime. It stands for a missing one, IsValid reports false for it, and
