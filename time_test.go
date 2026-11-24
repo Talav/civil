@@ -163,6 +163,31 @@ func TestNewTimeFromString(t *testing.T) {
 	}
 }
 
+func TestTimeSinceMidnight(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		// clock is the wall-clock reading.
+		clock civil.Time
+
+		// want is the offset from midnight at nanosecond precision.
+		want time.Duration
+	}{
+		{clock: civil.Time{}, want: 0},
+		{clock: clock(t, 9, 30, 0, 0), want: 9*time.Hour + 30*time.Minute},
+		{clock: clock(t, 0, 0, 7, 123), want: 7*time.Second + 123*time.Nanosecond},
+		{clock: clock(t, 23, 59, 59, 999_999_999), want: 24*time.Hour - time.Nanosecond},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.clock.String(), func(t *testing.T) {
+			t.Parallel()
+
+			assert.Equal(t, tt.want, tt.clock.SinceMidnight())
+		})
+	}
+}
+
 func TestTimeCompare(t *testing.T) {
 	t.Parallel()
 

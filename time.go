@@ -88,6 +88,14 @@ func (t Time) Second() int { return t.second }
 // Nanosecond returns the nanosecond of the second, 0 to 999999999.
 func (t Time) Nanosecond() int { return t.nanosecond }
 
+// SinceMidnight returns the wall-clock offset from midnight. It ranges from
+// zero to one nanosecond short of 24 hours. A clock reading of 09:30 always
+// gives 9 hours and 30 minutes, even on a day with a clock change.
+func (t Time) SinceMidnight() time.Duration {
+	return time.Duration(t.hour)*time.Hour + time.Duration(t.minute)*time.Minute +
+		time.Duration(t.second)*time.Second + time.Duration(t.nanosecond)
+}
+
 // String returns the time as HH:MM:SS. A time with a non-zero nanosecond gets
 // a point and all nine fraction digits: 09:30:00.250000000.
 func (t Time) String() string {
