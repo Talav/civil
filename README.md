@@ -47,6 +47,8 @@ if err != nil {
 fmt.Println(june.Days()) // 30
 ```
 
+`june.ContainsRange(period)` reports whether every date in `period` falls in June. For example, it returns true for `[2026-06-30,2026-07-01)` and for `june` itself.
+
 `Merge` joins two overlapping or adjacent ranges, and `Intersect` returns the days two ranges share.
 
 ### Turning a civil value into an instant

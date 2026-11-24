@@ -97,6 +97,12 @@ func (r DateRange) Contains(d Date) bool {
 	return !d.Before(r.start) && d.Before(r.end)
 }
 
+// ContainsRange reports whether every date in r2 is in r.
+// The ranges may share either or both endpoints.
+func (r DateRange) ContainsRange(r2 DateRange) bool {
+	return !r2.start.Before(r.start) && !r2.end.After(r.end)
+}
+
 // Overlaps reports whether r and r2 share at least one date.
 // Adjacent ranges share no dates.
 func (r DateRange) Overlaps(r2 DateRange) bool {

@@ -109,6 +109,9 @@ func TestDateRangeRelations(t *testing.T) {
 		// cmp is the expected order of base relative to other.
 		cmp int
 
+		// contains is true when base contains every date in other.
+		contains bool
+
 		// overlaps is true when the two ranges share a day.
 		overlaps bool
 
@@ -118,13 +121,15 @@ func TestDateRangeRelations(t *testing.T) {
 		// common is the expected intersection, zero when no day is shared.
 		common civil.DateRange
 	}{
-		{name: "same", other: base, overlaps: true, union: base, common: base},
+		{name: "same", other: base, contains: true, overlaps: true, union: base, common: base},
 		{name: "starts earlier and overlaps", other: span(5, 15), cmp: 1, overlaps: true, union: span(5, 20), common: span(10, 15)},
 		{name: "starts later and overlaps", other: span(15, 25), cmp: -1, overlaps: true, union: span(10, 25), common: span(15, 20)},
 		{name: "encloses", other: span(5, 25), cmp: 1, overlaps: true, union: span(5, 25), common: base},
-		{name: "inside", other: span(12, 15), cmp: -1, overlaps: true, union: base, common: span(12, 15)},
-		{name: "same start shorter", other: span(10, 18), cmp: 1, overlaps: true, union: base, common: span(10, 18)},
+		{name: "inside", other: span(12, 15), cmp: -1, contains: true, overlaps: true, union: base, common: span(12, 15)},
+		{name: "same start shorter", other: span(10, 18), cmp: 1, contains: true, overlaps: true, union: base, common: span(10, 18)},
 		{name: "same start longer", other: span(10, 23), cmp: -1, overlaps: true, union: span(10, 23), common: base},
+		{name: "same end shorter", other: span(19, 20), cmp: -1, contains: true, overlaps: true, union: base, common: span(19, 20)},
+		{name: "same end longer", other: span(5, 20), cmp: 1, overlaps: true, union: span(5, 20), common: base},
 		{name: "one shared day", other: span(19, 30), cmp: -1, overlaps: true, union: span(10, 30), common: span(19, 20)},
 		{name: "adjacent on left", other: span(5, 10), cmp: 1, union: span(5, 20)},
 		{name: "adjacent on right", other: span(20, 25), cmp: -1, union: span(10, 25)},
@@ -138,6 +143,7 @@ func TestDateRangeRelations(t *testing.T) {
 
 			assert.Equal(t, tt.cmp, base.Compare(tt.other))
 			assert.Equal(t, -tt.cmp, tt.other.Compare(base))
+			assert.Equal(t, tt.contains, base.ContainsRange(tt.other))
 			assert.Equal(t, tt.overlaps, base.Overlaps(tt.other))
 			assert.Equal(t, tt.overlaps, tt.other.Overlaps(base))
 
