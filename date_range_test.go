@@ -74,7 +74,7 @@ func TestNewDateRange(t *testing.T) {
 	}
 }
 
-func TestDateRangeContains(t *testing.T) {
+func TestDateRangeContainsDate(t *testing.T) {
 	t.Parallel()
 
 	start := date(t, 0, time.December, 31)
@@ -82,11 +82,11 @@ func TestDateRangeContains(t *testing.T) {
 	r := dateRange(t, start, end)
 
 	for _, d := range []civil.Date{start, plusDays(t, end, -1)} {
-		assert.True(t, r.Contains(d), d)
+		assert.True(t, r.ContainsDate(d), d)
 	}
 
 	for _, d := range []civil.Date{plusDays(t, start, -1), end, plusDays(t, end, 1)} {
-		assert.False(t, r.Contains(d), d)
+		assert.False(t, r.ContainsDate(d), d)
 	}
 }
 
@@ -143,7 +143,7 @@ func TestDateRangeRelations(t *testing.T) {
 
 			assert.Equal(t, tt.cmp, base.Compare(tt.other))
 			assert.Equal(t, -tt.cmp, tt.other.Compare(base))
-			assert.Equal(t, tt.contains, base.ContainsRange(tt.other))
+			assert.Equal(t, tt.contains, base.Contains(tt.other))
 			assert.Equal(t, tt.overlaps, base.Overlaps(tt.other))
 			assert.Equal(t, tt.overlaps, tt.other.Overlaps(base))
 

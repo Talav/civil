@@ -92,14 +92,14 @@ func (r DateRange) Days() int {
 	return r.end.DaysSince(r.start)
 }
 
-// Contains reports whether d is a day in r.
-func (r DateRange) Contains(d Date) bool {
+// ContainsDate reports whether d is a day in r.
+func (r DateRange) ContainsDate(d Date) bool {
 	return !d.Before(r.start) && d.Before(r.end)
 }
 
-// ContainsRange reports whether every date in r2 is in r.
+// Contains reports whether every date in r2 is in r.
 // The ranges may share either or both endpoints.
-func (r DateRange) ContainsRange(r2 DateRange) bool {
+func (r DateRange) Contains(r2 DateRange) bool {
 	return !r2.start.Before(r.start) && !r2.end.After(r.end)
 }
 
