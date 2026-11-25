@@ -114,24 +114,15 @@ func (d Date) String() string {
 	return string(d.appendTo(make([]byte, 0, dateLen)))
 }
 
-// In returns the instant at which the date starts in loc: the result of
-// time.Date for midnight of that day.
-//
-// A zone that skips midnight on that day has no such instant. time.Date then
-// picks a nearby one, which can fall on the previous day, and In returns it
-// unchanged. A nil loc panics, as it does in time.Date.
-func (d Date) In(loc *time.Location) time.Time {
-	return time.Date(d.year, d.month, d.day, 0, 0, 0, 0, loc)
+// In pairs d with loc, including [time.Local] and fixed zones.
+// A skipped date can still be paired with its zone.
+func (d Date) In(loc *time.Location) LocationDate {
+	return LocationDate{date: d, location: loc}
 }
 
-// At returns the instant at which a clock in loc shows t on the date: the
-// result of time.Date for that day and time.
-//
-// A wall time that a zone skips or repeats on that day has no single instant.
-// time.Date then picks one, and At returns it unchanged. A nil loc panics, as
-// it does in time.Date.
-func (d Date) At(t Time, loc *time.Location) time.Time {
-	return time.Date(d.year, d.month, d.day, t.hour, t.minute, t.second, t.nanosecond, loc)
+// At pairs d with the wall-clock reading t.
+func (d Date) At(t Time) DateTime {
+	return DateTime{date: d, time: t}
 }
 
 // AddDays returns the date n days after d. A negative n goes into the past.

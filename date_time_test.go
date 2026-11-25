@@ -1,6 +1,7 @@
 package civil_test
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -67,6 +68,7 @@ func TestDateTimeIsValid(t *testing.T) {
 		want     bool
 	}{
 		{name: "zero value", dateTime: civil.DateTime{}, want: false},
+		{name: "missing date with a clock", dateTime: civil.Date{}.At(clock(t, 9, 30, 0, 0)), want: false},
 		{name: "date at midnight", dateTime: dateTime(t, date(t, 2026, time.March, 9), civil.Time{}), want: true},
 		{name: "date and time", dateTime: dateTime(t, date(t, 2026, time.March, 9), clock(t, 9, 30, 0, 0)), want: true},
 		{name: "datetime of the zero time", dateTime: dateTime(t, date(t, 1, time.January, 1), civil.Time{}), want: true},
@@ -240,6 +242,7 @@ func TestDateTimeIn(t *testing.T) {
 	require.NoError(t, err)
 
 	dt := dateTime(t, date(t, 2026, time.March, 9), clock(t, 8, 30, 0, 0))
+	assert.Panics(t, func() { dt.In(nil) })
 
 	tests := []struct {
 		name string
@@ -381,6 +384,22 @@ func TestDateTimeTextErrors(t *testing.T) {
 			assertNoTextForm(t, tt.display, tt.wantErr, tt.value)
 		})
 	}
+}
+
+func TestDateTimeJSONOmitZero(t *testing.T) {
+	t.Parallel()
+
+	type payload struct {
+		// Start is the optional start of a session.
+		Start civil.DateTime `json:"start,omitzero"`
+	}
+
+	data, err := json.Marshal(payload{})
+	require.NoError(t, err)
+	assert.JSONEq(t, `{}`, string(data))
+
+	_, err = json.Marshal(payload{Start: civil.Date{}.At(clock(t, 9, 30, 0, 0))})
+	require.ErrorContains(t, err, "cannot marshal the zero DateTime")
 }
 
 func TestDateTimeScan(t *testing.T) {

@@ -51,35 +51,28 @@ fmt.Println(june.Days()) // 30
 
 `Merge` joins two overlapping or adjacent ranges, and `Intersect` returns the days two ranges share.
 
-### Turning a civil value into an instant
+### Locations and wall times
+
+`date.In(loc)` pairs a date with a Go location, including `time.Local` and fixed offsets. `date.At(clock)` pairs it with a wall-clock reading. Either order gives the same instant. When you already have a `time.Time`, `civil.NewLocationDateFromTime(t)` takes both the date and the location from it.
 
 ```go
 newYork, err := time.LoadLocation("America/New_York")
 if err != nil {
     return err
 }
-fmt.Println(start.In(newYork).UTC()) // 2026-06-01 04:00:00 +0000 UTC
-```
-
-A wall time that a zone skips or repeats on that day (a daylight saving change) has no single instant. These methods return whatever `time.Date` picks.
-
-### LocationDate
-
-A `LocationDate` is a `Date` in a named IANA time zone. `"Local"` is rejected, because it names a different zone on each machine.
-
-```go
-day, err := civil.NewLocationDate(start, "America/New_York")
-if err != nil {
-    return err
-}
-fmt.Println(day) // 2026-06-01[America/New_York]
-
 open, err := civil.NewTime(9, 30, 0, 0)
 if err != nil {
     return err
 }
-fmt.Println(day.At(open).UTC()) // 2026-06-01 13:30:00 +0000 UTC
+
+day := start.In(newYork)
+session := day.At(open) // equivalent to start.At(open).In(newYork)
+fmt.Println(session.UTC()) // 2026-06-01 13:30:00 +0000 UTC
 ```
+
+Use `day.At(civil.Time{})` to request local midnight. For any skipped or repeated wall-clock reading, `day.At` returns the instant selected by `time.Date`.
+
+When the input is a zone name, `civil.NewLocationDate(start, "America/New_York")` loads it and returns an error for an invalid name. JSON stores `loc.String()`. Decoding requires a nonempty name other than `Local` that `time.LoadLocation` can resolve. Location dates compare by date, then by zone name. Two unnamed locations on the same date compare equal.
 
 ### JSON
 
@@ -110,7 +103,7 @@ Bind `r.Start()` and `r.End()` on writes. On reads, scan into two `civil.Date` v
 ## Zero Values
 
 - The zero values of `Date`, `DateTime`, `DateRange` and `LocationDate` represent missing values. Check them with `IsValid()`.
-- Encoding a missing value to text, JSON or SQL is an error. In JSON, tag the field `omitzero` to leave it out.
+- Encoding a missing value to text, JSON or SQL returns an error. A JSON field tagged `omitzero` is omitted when it holds its Go zero value.
 - `civil.Time{}` is midnight, a real time of day, so `Time` has no `IsValid`.
 
 ## Testing

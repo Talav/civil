@@ -3,17 +3,15 @@
 //
 // A Date names a day on the calendar, such as a trading day or an expiry. A
 // Time names a reading of a wall clock, such as a session close. A DateTime
-// holds one of each. None is an instant: the same Date and Time happen at
-// different moments in different time zones. Date.In, Date.At and DateTime.In
-// join them with a location into an instant, and NewDateFromTime,
-// NewTimeFromTime and NewDateTimeFromTime split an instant back up.
+// holds one of each. Date.At pairs a date and time into a DateTime. Date.In
+// pairs a date and time zone into a LocationDate.
 //
-// A LocationDate is the one type that has a time zone: a Date in a named zone.
-// LocationDate.At joins it with a Time into an instant.
+// LocationDate.At and DateTime.In resolve a wall-clock reading in either
+// order using [time.Date], including its choice for skipped or repeated readings.
+// NewDateFromTime, NewTimeFromTime and NewDateTimeFromTime read the civil
+// fields of an instant in its own location.
 //
-// There is one notion of validity, and IsValid reports it. It is false only
-// for a zero value that stands for a missing one, and encoding such a value
-// is an error.
+// IsValid reports whether a date is present. Encoding a missing value is an error.
 //
 // Dates are counted in the proleptic Gregorian calendar.
 package civil

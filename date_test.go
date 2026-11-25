@@ -351,62 +351,51 @@ func TestDateAddMonthsAndYearsAgreeWithTime(t *testing.T) {
 func TestDateIn(t *testing.T) {
 	t.Parallel()
 
-	chicago, err := time.LoadLocation("America/Chicago")
+	apia, err := time.LoadLocation("Pacific/Apia")
 	require.NoError(t, err)
+	skipped := date(t, 2011, time.December, 30)
 
-	tests := []struct {
-		name string
-		date civil.Date
-		loc  *time.Location
-		want time.Time
-	}{
-		{name: "UTC", date: date(t, 2026, time.March, 9), loc: time.UTC, want: utc(2026, time.March, 9)},
-		{name: "zone behind UTC in summer time", date: date(t, 2026, time.March, 9), loc: chicago, want: time.Date(2026, time.March, 9, 5, 0, 0, 0, time.UTC)},
-		{name: "day of a daylight saving change", date: date(t, 2026, time.March, 8), loc: chicago, want: time.Date(2026, time.March, 8, 6, 0, 0, 0, time.UTC)},
-	}
+	// The pairing is valid even though no instant in Apia displays this date.
+	day := skipped.In(apia)
+	assert.True(t, day.IsValid())
+	assert.Equal(t, skipped, day.Date())
+	assert.Same(t, apia, day.Location())
+	assert.True(t, day.Equal(locationDate(t, skipped, "Pacific/Apia")))
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
+	data, err := json.Marshal(day)
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"date":"2011-12-30","timeZone":"Pacific/Apia"}`, string(data))
 
-			got := tt.date.In(tt.loc)
+	missing := civil.Date{}.In(time.UTC)
+	assert.False(t, missing.IsValid())
+	assert.Same(t, time.UTC, missing.Location())
 
-			assert.True(t, tt.want.Equal(got), "got %s", got)
-			assert.Equal(t, tt.loc, got.Location())
-			assert.Equal(t, tt.date, dateOf(t, got))
-		})
+	withoutLocation := skipped.In(nil)
+	assert.Equal(t, skipped, withoutLocation.Date())
+	assert.Nil(t, withoutLocation.Location())
+
+	open := clock(t, 9, 30, 0, 0)
+	for _, loc := range []*time.Location{time.Local, time.FixedZone("Local", 3600), time.FixedZone("", -5400)} {
+		day := skipped.In(loc)
+		assert.Same(t, loc, day.Location())
+		want := time.Date(2011, time.December, 30, 9, 30, 0, 0, loc)
+		assert.Equal(t, want, day.At(open))
+		assert.Equal(t, want, skipped.At(open).In(loc))
 	}
 }
 
 func TestDateAt(t *testing.T) {
 	t.Parallel()
 
-	chicago, err := time.LoadLocation("America/Chicago")
-	require.NoError(t, err)
-
-	tests := []struct {
-		name string
-		date civil.Date
-		time civil.Time
-		loc  *time.Location
-		want time.Time
-	}{
-		{name: "midnight is the start of the day", date: date(t, 2026, time.March, 9), time: civil.Time{}, loc: time.UTC, want: utc(2026, time.March, 9)},
-		{name: "wall time in UTC", date: date(t, 2026, time.March, 9), time: clock(t, 14, 30, 15, 250), loc: time.UTC, want: time.Date(2026, time.March, 9, 14, 30, 15, 250, time.UTC)},
-		{name: "session open in winter time", date: date(t, 2026, time.March, 6), time: clock(t, 8, 30, 0, 0), loc: chicago, want: time.Date(2026, time.March, 6, 14, 30, 0, 0, time.UTC)},
-		{name: "session open in summer time", date: date(t, 2026, time.March, 9), time: clock(t, 8, 30, 0, 0), loc: chicago, want: time.Date(2026, time.March, 9, 13, 30, 0, 0, time.UTC)},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	d := date(t, 2026, time.March, 9)
+	for _, tm := range []civil.Time{{}, clock(t, 14, 30, 15, 250)} {
+		t.Run(tm.String(), func(t *testing.T) {
 			t.Parallel()
 
-			got := tt.date.At(tt.time, tt.loc)
-
-			assert.True(t, tt.want.Equal(got), "got %s", got)
-			assert.Equal(t, tt.loc, got.Location())
-			assert.Equal(t, tt.date, dateOf(t, got))
-			assert.Equal(t, tt.time, civil.NewTimeFromTime(got))
+			assert.Equal(t, dateTime(t, d, tm), d.At(tm))
+			missing := civil.Date{}.At(tm)
+			assert.False(t, missing.IsValid())
+			assert.Equal(t, tm, missing.Time())
 		})
 	}
 }

@@ -2,6 +2,7 @@ package civil_test
 
 import (
 	"encoding/json"
+	"math"
 	"testing"
 	"time"
 
@@ -80,6 +81,44 @@ func TestNewLocationDate(t *testing.T) {
 	}
 }
 
+func TestNewLocationDateFromTime(t *testing.T) {
+	t.Parallel()
+
+	newYork, err := time.LoadLocation("America/New_York")
+	require.NoError(t, err)
+
+	midnightUTC := utc(2026, time.March, 10)
+	march9 := date(t, 2026, time.March, 9)
+	march10 := date(t, 2026, time.March, 10)
+
+	tests := []struct {
+		// name describes the timestamp's location.
+		name string
+
+		// instant supplies both the calendar fields and the location.
+		instant time.Time
+
+		// wantDate is the calendar date in that location.
+		wantDate civil.Date
+	}{
+		{name: "UTC", instant: midnightUTC, wantDate: march10},
+		{name: "previous day in New York", instant: midnightUTC.In(newYork), wantDate: march9},
+		{name: "machine location", instant: time.Date(2026, time.March, 10, 12, 0, 0, 0, time.Local), wantDate: march10},
+		{name: "unnamed fixed offset", instant: midnightUTC.In(time.FixedZone("", -5400)), wantDate: march9},
+		{name: "fixed offset named UTC", instant: midnightUTC.In(time.FixedZone("UTC", -3600)), wantDate: march9},
+		{name: "zero time", instant: time.Time{}, wantDate: date(t, 1, time.January, 1)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := civil.NewLocationDateFromTime(tt.instant)
+			assert.Equal(t, tt.wantDate, got.Date())
+			assert.Same(t, tt.instant.Location(), got.Location())
+		})
+	}
+}
+
 func TestLocationDateIsValid(t *testing.T) {
 	t.Parallel()
 
@@ -91,6 +130,8 @@ func TestLocationDateIsValid(t *testing.T) {
 
 func TestLocationDateAt(t *testing.T) {
 	t.Parallel()
+
+	assert.Panics(t, func() { civil.LocationDate{}.At(civil.Time{}) })
 
 	tests := []struct {
 		// name describes the zone and the wall time.
@@ -125,6 +166,51 @@ func TestLocationDateAt(t *testing.T) {
 	}
 }
 
+func TestLocationDateClockChanges(t *testing.T) {
+	t.Parallel()
+
+	nearLimit := civil.NewDateFromTime(time.Unix(math.MaxInt64-24*60*60, 0).UTC())
+
+	tests := []struct {
+		// zone is the IANA name used for both chains.
+		zone string
+
+		// day is the local calendar date.
+		day civil.Date
+
+		// clock is the reading passed to At.
+		clock civil.Time
+	}{
+		{zone: "UTC", day: date(t, 1, time.January, 1)},
+		{zone: "Pacific/Apia", day: date(t, 2011, time.December, 30)},
+		{zone: "America/Goose_Bay", day: date(t, 2009, time.November, 1)},
+		{zone: "America/Goose_Bay", day: date(t, 2009, time.November, 1), clock: clock(t, 0, 1, 0, 1)},
+		{zone: "America/Sao_Paulo", day: date(t, 2018, time.November, 4)},
+		{zone: "America/Santiago", day: date(t, 2025, time.September, 7)},
+		{zone: "America/New_York", day: date(t, 2024, time.March, 10), clock: clock(t, 2, 30, 0, 0)},
+		{zone: "Australia/Lord_Howe", day: date(t, 2024, time.April, 7), clock: clock(t, 1, 45, 0, 0)},
+		{zone: "Asia/Kathmandu", day: date(t, 1986, time.January, 1), clock: clock(t, 0, 15, 0, 0)},
+		{zone: "America/New_York", day: date(t, 2040, time.December, 31), clock: clock(t, 23, 59, 59, 999_999_999)},
+		{zone: "Asia/Tokyo", day: nearLimit},
+		{zone: "UTC", day: civil.Date{}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.zone+"/"+tt.day.String()+"/"+tt.clock.String(), func(t *testing.T) {
+			t.Parallel()
+
+			loc, err := time.LoadLocation(tt.zone)
+			require.NoError(t, err)
+			day := tt.day.In(loc)
+
+			d, tm := tt.day, tt.clock
+			want := time.Date(d.Year(), d.Month(), d.Day(), tm.Hour(), tm.Minute(), tm.Second(), tm.Nanosecond(), loc)
+			assert.Equal(t, want, day.At(tt.clock))
+			assert.Equal(t, want, tt.day.At(tt.clock).In(loc))
+		})
+	}
+}
+
 func TestLocationDateEqualAndCompare(t *testing.T) {
 	t.Parallel()
 
@@ -140,7 +226,7 @@ func TestLocationDateEqualAndCompare(t *testing.T) {
 		// b is the argument.
 		b civil.LocationDate
 
-		// wantEqual is true when a and b are the same date in the same zone.
+		// wantEqual is true when a and b have the same date and zone name.
 		wantEqual bool
 
 		// wantCompare is the expected order of a relative to b.
@@ -152,6 +238,9 @@ func TestLocationDateEqualAndCompare(t *testing.T) {
 		{name: "same date, zone names in order", a: locationDate(t, march9, "Europe/Berlin"), b: locationDate(t, march9, "Europe/Paris"), wantCompare: -1},
 		{name: "same date, zone names out of order", a: locationDate(t, march9, "Europe/Paris"), b: locationDate(t, march9, "Europe/Berlin"), wantCompare: 1},
 		{name: "two names for the same rules", a: locationDate(t, march9, "America/New_York"), b: locationDate(t, march9, "US/Eastern"), wantCompare: -1},
+		{name: "unnamed zones with the same offset", a: march9.In(time.FixedZone("", 5400)), b: march9.In(time.FixedZone("", 5400)), wantEqual: true},
+		{name: "unnamed zones with different offsets", a: march9.In(time.FixedZone("", -3600)), b: march9.In(time.FixedZone("", 3600)), wantEqual: true},
+		{name: "unnamed and named zones with the same offset", a: march9.In(time.FixedZone("", 0)), b: march9.In(time.UTC), wantCompare: -1},
 	}
 
 	for _, tt := range tests {
@@ -196,28 +285,37 @@ func TestLocationDateJSONOmitZero(t *testing.T) {
 	}
 
 	data, err := json.Marshal(payload{})
-
 	require.NoError(t, err)
 	assert.JSONEq(t, `{}`, string(data))
+
+	_, err = json.Marshal(payload{Day: civil.Date{}.In(time.UTC)})
+	require.ErrorContains(t, err, "cannot marshal the zero LocationDate")
 }
 
-func TestLocationDateMarshalJSONErrors(t *testing.T) {
+func TestLocationDateMarshalJSON(t *testing.T) {
 	t.Parallel()
 
+	d := date(t, 2026, time.March, 9)
 	tests := []struct {
-		// name describes why the value has no JSON form.
+		// name describes the location date.
 		name string
 
 		// day is the value to encode.
 		day civil.LocationDate
 
-		// display is the printable form, which still works.
+		// display is the printable form.
 		display string
+
+		// wantJSON is the encoded date and location name.
+		wantJSON string
 
 		// wantErr is the reason encoding fails.
 		wantErr string
 	}{
 		{name: "zero value", day: civil.LocationDate{}, display: "0000-00-00[UTC]", wantErr: "cannot marshal the zero LocationDate"},
+		{name: "unnamed offset", day: d.In(time.FixedZone("", 3600)), display: "2026-03-09[]", wantJSON: `{"date":"2026-03-09","timeZone":""}`},
+		{name: "machine-local name", day: d.In(time.FixedZone("Local", 3600)), display: "2026-03-09[Local]", wantJSON: `{"date":"2026-03-09","timeZone":"Local"}`},
+		{name: "custom name", day: d.In(time.FixedZone("Invented", 3600)), display: "2026-03-09[Invented]", wantJSON: `{"date":"2026-03-09","timeZone":"Invented"}`},
 	}
 
 	for _, tt := range tests {
@@ -226,11 +324,17 @@ func TestLocationDateMarshalJSONErrors(t *testing.T) {
 
 			assert.Equal(t, tt.display, tt.day.String())
 
-			_, err := tt.day.MarshalJSON()
-			require.EqualError(t, err, tt.wantErr)
+			data, err := json.Marshal(tt.day)
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				_, err = tt.day.MarshalJSON()
+				require.EqualError(t, err, tt.wantErr)
 
-			_, err = json.Marshal(tt.day)
-			require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.JSONEq(t, tt.wantJSON, string(data))
 		})
 	}
 }

@@ -16,15 +16,10 @@ const dateTimeLen = dateLen + len("T") + hourMinuteSecondLen
 // zone: what a calendar and a wall clock show at some moment, without saying
 // where.
 //
-// A DateTime comes only from a constructor, so its date is a day that exists
-// and its time is in range. DateTimes are comparable with == and usable as
-// map keys.
-//
-// The zero value is the one exception: it has no date, so it is not a
-// datetime. It stands for a missing one, IsValid reports false for it, and
-// other methods are meaningless on it.
+// DateTimes are comparable with == and usable as map keys. A DateTime with
+// a missing date, including the zero value, represents a missing datetime.
 type DateTime struct {
-	// date is the calendar day. It is never the zero Date.
+	// date is the calendar day, or the zero Date if it is missing.
 	date Date
 
 	// time is the time of day on that date.
@@ -78,8 +73,7 @@ func (dt DateTime) Date() Date { return dt.date }
 // Time returns the time of day of the datetime.
 func (dt DateTime) Time() Time { return dt.time }
 
-// IsValid reports whether dt is a datetime. It is false only for the zero
-// value, which stands for a missing one.
+// IsValid reports whether dt has a calendar date.
 func (dt DateTime) IsValid() bool {
 	return dt.date.IsValid()
 }
@@ -91,14 +85,14 @@ func (dt DateTime) String() string {
 	return string(dt.appendTo(make([]byte, 0, dateTimeLen)))
 }
 
-// In returns the instant at which a calendar and a clock in loc show the
-// datetime: the result of time.Date for that day and time.
-//
-// A wall time that a zone skips or repeats on that day has no single instant.
-// time.Date then picks one, and In returns it unchanged. A nil loc panics, as
-// it does in time.Date.
+// In resolves dt in loc using [time.Date], including its choice for skipped
+// or repeated readings. It panics if loc is nil.
 func (dt DateTime) In(loc *time.Location) time.Time {
-	return dt.date.At(dt.time, loc)
+	return time.Date(
+		dt.date.year, dt.date.month, dt.date.day,
+		dt.time.hour, dt.time.minute, dt.time.second, dt.time.nanosecond,
+		loc,
+	)
 }
 
 // Before reports whether dt is earlier than dt2.

@@ -8,30 +8,24 @@ import (
 	"time"
 )
 
-// localZone is the name that time.LoadLocation reads as the zone of the
-// machine. It is no zone of its own: it means another zone on another
-// machine, so it cannot identify the zone of a LocationDate.
+// localZone names the machine's zone. Its meaning can change across machines.
 const localZone = "Local"
 
-// A LocationDate is a calendar day in a named time zone.
+// A LocationDate is a calendar day in a time zone.
 //
-// A LocationDate comes only from a constructor, so its date is a day that
-// exists and its zone is one the time zone database knows. The zone name is
-// the zone's identity; the rules behind the name come from the time zone
-// database of the machine.
+// Date.In takes a Go location. NewLocationDate loads a zone by name.
+// JSON records the zone name and uses the receiving machine's zone database
+// when decoded.
 //
 // Compare LocationDates with Equal, not ==, and do not use them as map keys: two
 // values for the same day in the same zone can hold different pointers.
 //
-// The zero value is the one exception: it has no date and no zone. It stands
-// for a missing one, IsValid reports false for it, and other methods are
-// meaningless on it.
+// A LocationDate with a missing date, including the zero value, is missing.
 type LocationDate struct {
-	// date is the calendar day. It is the zero Date only in the zero value.
+	// date is the calendar day, or the zero Date if it is missing.
 	date Date
 
-	// location holds the rules of the time zone the day is read in, loaded
-	// by the name that identifies the zone. It is nil only in the zero value.
+	// location holds the zone whose rules apply to date.
 	location *time.Location
 }
 
@@ -70,38 +64,35 @@ func NewLocationDate(d Date, zone string) (LocationDate, error) {
 	return ld, nil
 }
 
+// NewLocationDateFromTime returns the calendar date t shows in its own
+// location and retains that location.
+func NewLocationDateFromTime(t time.Time) LocationDate {
+	return NewDateFromTime(t).In(t.Location())
+}
+
 // Date returns the calendar day.
 func (ld LocationDate) Date() Date { return ld.date }
 
-// Location returns the time zone the day is read in. Its String method gives
-// the zone name that NewLocationDate was called with.
+// Location returns the time zone the day is read in.
 func (ld LocationDate) Location() *time.Location { return ld.location }
 
-// IsValid reports whether ld is a day in a zone. It is false only for the zero
-// value, which stands for a missing one.
+// IsValid reports whether ld has a calendar date.
 func (ld LocationDate) IsValid() bool {
 	return ld.date.IsValid()
 }
 
-// At returns the instant at which a clock in the zone shows t on the date:
-// Date.At for the date and the zone.
-//
-// A wall time that the zone skips or repeats on that day has no single
-// instant. time.Date then picks one, and At returns it unchanged. The zero
-// LocationDate has no zone, and At panics on it as time.Date does without a
-// location.
+// At resolves t on ld's date using [time.Date], including its choice for
+// skipped or repeated readings. It panics if ld has no location.
 func (ld LocationDate) At(t Time) time.Time {
-	return ld.date.At(t, ld.location)
+	return ld.date.At(t).In(ld.location)
 }
 
-// Equal reports whether ld and ld2 are the same date in the same zone. Zones
-// are the same when their names are.
+// Equal reports whether ld and ld2 have the same date and zone name.
 func (ld LocationDate) Equal(ld2 LocationDate) bool {
 	return ld.Compare(ld2) == 0
 }
 
-// Compare orders two location dates for sorting by date, then by zone name.
-// The result is negative, zero or positive as in Date.Compare.
+// Compare orders by date, then by zone name.
 func (ld LocationDate) Compare(ld2 LocationDate) int {
 	return cmp.Or(
 		ld.date.Compare(ld2.date),
@@ -124,7 +115,7 @@ func (ld LocationDate) String() string {
 // zone name: {"date":"2026-03-09","timeZone":"America/New_York"}. It makes
 // LocationDate a json.Marshaler.
 //
-// For the zero LocationDate, which is not valid, it returns an error.
+// The zone name comes from [time.Location.String]. A missing date gives an error.
 func (ld LocationDate) MarshalJSON() ([]byte, error) {
 	if !ld.IsValid() {
 		return nil, errors.New("cannot marshal the zero LocationDate")
@@ -182,6 +173,6 @@ type locationDateJSON struct {
 	// Date is the calendar day, written as Date writes it.
 	Date *Date `json:"date"`
 
-	// TimeZone is the IANA Time Zone Database name of the zone.
+	// TimeZone is the name of the location.
 	TimeZone *string `json:"timeZone"`
 }
