@@ -11,7 +11,5 @@
 // NewDateFromTime, NewTimeFromTime and NewDateTimeFromTime read the civil
 // fields of an instant in its own location.
 //
-// IsValid reports whether a date is present. Encoding a missing value is an error.
-//
 // Dates are counted in the proleptic Gregorian calendar.
 package civil

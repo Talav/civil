@@ -289,7 +289,7 @@ func TestLocationDateJSONOmitZero(t *testing.T) {
 	assert.JSONEq(t, `{}`, string(data))
 
 	_, err = json.Marshal(payload{Day: civil.Date{}.In(time.UTC)})
-	require.ErrorContains(t, err, "cannot marshal the zero LocationDate")
+	require.ErrorContains(t, err, "cannot marshal an invalid LocationDate")
 }
 
 func TestLocationDateMarshalJSON(t *testing.T) {
@@ -312,7 +312,8 @@ func TestLocationDateMarshalJSON(t *testing.T) {
 		// wantErr is the reason encoding fails.
 		wantErr string
 	}{
-		{name: "zero value", day: civil.LocationDate{}, display: "0000-00-00[UTC]", wantErr: "cannot marshal the zero LocationDate"},
+		{name: "zero value", day: civil.LocationDate{}, display: "0000-00-00[UTC]", wantErr: "cannot marshal an invalid LocationDate"},
+		{name: "missing location", day: d.In(nil), display: "2026-03-09[UTC]", wantErr: "cannot marshal an invalid LocationDate"},
 		{name: "unnamed offset", day: d.In(time.FixedZone("", 3600)), display: "2026-03-09[]", wantJSON: `{"date":"2026-03-09","timeZone":""}`},
 		{name: "machine-local name", day: d.In(time.FixedZone("Local", 3600)), display: "2026-03-09[Local]", wantJSON: `{"date":"2026-03-09","timeZone":"Local"}`},
 		{name: "custom name", day: d.In(time.FixedZone("Invented", 3600)), display: "2026-03-09[Invented]", wantJSON: `{"date":"2026-03-09","timeZone":"Invented"}`},

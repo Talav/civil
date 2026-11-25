@@ -371,6 +371,7 @@ func TestDateIn(t *testing.T) {
 	assert.Same(t, time.UTC, missing.Location())
 
 	withoutLocation := skipped.In(nil)
+	assert.False(t, withoutLocation.IsValid())
 	assert.Equal(t, skipped, withoutLocation.Date())
 	assert.Nil(t, withoutLocation.Location())
 

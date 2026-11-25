@@ -76,9 +76,8 @@ func (ld LocationDate) Date() Date { return ld.date }
 // Location returns the time zone the day is read in.
 func (ld LocationDate) Location() *time.Location { return ld.location }
 
-// IsValid reports whether ld has a calendar date.
 func (ld LocationDate) IsValid() bool {
-	return ld.date.IsValid()
+	return ld.date.IsValid() && ld.location != nil
 }
 
 // At resolves t on ld's date using [time.Date], including its choice for
@@ -118,7 +117,7 @@ func (ld LocationDate) String() string {
 // The zone name comes from [time.Location.String]. A missing date gives an error.
 func (ld LocationDate) MarshalJSON() ([]byte, error) {
 	if !ld.IsValid() {
-		return nil, errors.New("cannot marshal the zero LocationDate")
+		return nil, errors.New("cannot marshal an invalid LocationDate")
 	}
 
 	zone := ld.location.String()
